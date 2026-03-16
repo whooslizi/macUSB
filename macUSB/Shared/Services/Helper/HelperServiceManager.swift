@@ -318,6 +318,14 @@ final class HelperServiceManager: NSObject {
                 return
             }
 
+            if isLikelyBackgroundTaskPolicyBlock(error) {
+                let details = diagnosticErrorDescription(for: error)
+                let guidance = String(localized: "System blokuje rejestrację helpera (Background Task Management). Usuń stare wpisy macUSB z „Login Items / Allow in the Background”, uruchom `sudo sfltool resetbtm`, uruchom ponownie macOS i uruchom tylko wersję z /Applications.")
+                reportHelperServiceEvent("Wykryto blokadę BTM podczas register(): \(details)")
+                completion(false, "\(guidance) Szczegóły: \(details)")
+                return
+            }
+
             if isRunningFromXcodeSession() && isOperationNotPermitted(error) {
                 AppLogging.error(
                     "Rejestracja helpera z uruchomienia Xcode została zablokowana przez system (Operation not permitted).",
@@ -436,73 +444,119 @@ final class HelperServiceManager: NSObject {
         reportHelperServiceEvent("Uruchamiam procedurę odzyskiwania rejestracji helpera.")
         coordinationQueue.async {
             let service = SMAppService.daemon(plistName: Self.daemonPlistName)
-            do {
-                if service.status == .enabled {
-                    self.reportHelperServiceEvent("Helper jest enabled. Wywołuję unregister() przed ponowną rejestracją.")
-                    try service.unregister()
-                    Thread.sleep(forTimeInterval: 0.25)
-                }
+            self.reportHelperServiceEvent("Status helpera przed recover: \(self.statusDescription(service.status)).")
 
+            let registerAfterRecovery: () -> Void = {
                 self.reportHelperServiceEvent("Wywołuję register() po odzyskiwaniu.")
-                try service.register()
-                self.handlePostRegistrationStatus(interactive: interactive) { ready, message in
-                    guard ready else {
-                        self.reportHelperServiceEvent("Po recover register() helper nadal nie jest gotowy.")
-                        completion(false, message)
-                        return
-                    }
-
-                    PrivilegedOperationClient.shared.queryHealth { recovered, recoveredDetails in
-                        if recovered {
-                            self.reportHelperServiceEvent("Health XPC po odzyskiwaniu: OK (\(recoveredDetails)).")
-                            completion(true, nil)
-                        } else {
-                            self.reportHelperServiceEvent("Health XPC po odzyskiwaniu nadal nie działa: \(recoveredDetails).")
-                            completion(
-                                false,
-                                "Helper został ponownie zarejestrowany, ale XPC nadal nie działa: \(recoveredDetails). Poprzedni błąd: \(healthDetails)"
-                            )
-                        }
-                    }
-                }
-            } catch {
-                self.reportHelperServiceEvent("Błąd podczas odzyskiwania helpera: \(error.localizedDescription)")
-                if service.status == .enabled {
-                    AppLogging.info(
-                        "Ponowna rejestracja helpera zwróciła błąd, ale status to enabled. Kontynuuję walidację.",
-                        category: "Installation"
-                    )
-                    self.reportHelperServiceEvent("Mimo błędu recover status helpera to enabled. Kontynuuję walidację.")
-                    self.handlePostRegistrationStatus(interactive: interactive, completion: completion)
-                    return
-                }
-
-                if self.isRunningFromXcodeSession() && self.isOperationNotPermitted(error) {
-                    PrivilegedOperationClient.shared.queryHealth(withTimeout: 1.2) { ok, details in
-                        if ok {
-                            self.reportHelperServiceEvent("W sesji Xcode recovery zablokowany, ale helper odpowiada przez XPC.")
-                            completion(true, nil)
+                do {
+                    try service.register()
+                    self.reportHelperServiceEvent("Status helpera po register() w recover: \(self.statusDescription(service.status)).")
+                    self.handlePostRegistrationStatus(interactive: interactive) { ready, message in
+                        guard ready else {
+                            self.reportHelperServiceEvent("Po recover register() helper nadal nie jest gotowy.")
+                            completion(false, message)
                             return
                         }
 
-                        self.reportHelperServiceEvent("W sesji Xcode recovery zablokowany i helper nadal nie odpowiada przez XPC.")
-                        completion(
-                            false,
-                            "System zablokował ponowną rejestrację helpera z sesji Xcode. Uruchom aplikację z katalogu /Applications i wykonaj naprawę helpera. Szczegóły XPC: \(details). Poprzedni błąd: \(healthDetails)"
-                        )
+                        PrivilegedOperationClient.shared.queryHealth { recovered, recoveredDetails in
+                            if recovered {
+                                self.reportHelperServiceEvent("Health XPC po odzyskiwaniu: OK (\(recoveredDetails)).")
+                                completion(true, nil)
+                            } else {
+                                self.reportHelperServiceEvent("Health XPC po odzyskiwaniu nadal nie działa: \(recoveredDetails).")
+                                completion(
+                                    false,
+                                    "Helper został ponownie zarejestrowany, ale XPC nadal nie działa: \(recoveredDetails). Poprzedni błąd: \(healthDetails)"
+                                )
+                            }
+                        }
                     }
+                } catch {
+                    self.handleRecoveryRegistrationError(
+                        service: service,
+                        error: error,
+                        interactive: interactive,
+                        healthDetails: healthDetails,
+                        completion: completion
+                    )
+                }
+            }
+
+            guard service.status == .enabled else {
+                registerAfterRecovery()
+                return
+            }
+
+            self.reportHelperServiceEvent("Helper jest enabled. Wywołuję unregister() przed ponowną rejestracją.")
+            service.unregister { error in
+                self.coordinationQueue.async {
+                    if let error {
+                        self.reportHelperServiceEvent(
+                            "unregister() w recover zwróciło błąd: \(self.diagnosticErrorDescription(for: error)). Status helpera po błędzie: \(self.statusDescription(service.status))."
+                        )
+                    } else {
+                        self.reportHelperServiceEvent("unregister() w recover zakończone. Status helpera: \(self.statusDescription(service.status)).")
+                    }
+
+                    self.coordinationQueue.asyncAfter(deadline: .now() + 0.15) {
+                        registerAfterRecovery()
+                    }
+                }
+            }
+        }
+    }
+
+    private func handleRecoveryRegistrationError(
+        service: SMAppService,
+        error: Error,
+        interactive: Bool,
+        healthDetails: String,
+        completion: @escaping (Bool, String?) -> Void
+    ) {
+        reportHelperServiceEvent("Błąd podczas odzyskiwania helpera: \(diagnosticErrorDescription(for: error))")
+        if service.status == .enabled {
+            AppLogging.info(
+                "Ponowna rejestracja helpera zwróciła błąd, ale status to enabled. Kontynuuję walidację.",
+                category: "Installation"
+            )
+            reportHelperServiceEvent("Mimo błędu recover status helpera to enabled. Kontynuuję walidację.")
+            handlePostRegistrationStatus(interactive: interactive, completion: completion)
+            return
+        }
+
+        if isRunningFromXcodeSession() && isOperationNotPermitted(error) {
+            PrivilegedOperationClient.shared.queryHealth(withTimeout: 1.2) { ok, details in
+                if ok {
+                    self.reportHelperServiceEvent("W sesji Xcode recovery zablokowany, ale helper odpowiada przez XPC.")
+                    completion(true, nil)
                     return
                 }
 
-                DispatchQueue.main.async {
-                    self.presentRegistrationErrorAlertIfNeeded(error: error, interactive: interactive)
-                }
+                self.reportHelperServiceEvent("W sesji Xcode recovery zablokowany i helper nadal nie odpowiada przez XPC.")
                 completion(
                     false,
-                    "Helper nie odpowiada przez XPC (\(healthDetails)). Nie udało się ponownie zarejestrować helpera: \(error.localizedDescription)"
+                    "System zablokował ponowną rejestrację helpera z sesji Xcode. Uruchom aplikację z katalogu /Applications i wykonaj naprawę helpera. Szczegóły XPC: \(details). Poprzedni błąd: \(healthDetails)"
                 )
             }
+            return
         }
+
+        if isLikelyBackgroundTaskPolicyBlock(error) {
+            let details = diagnosticErrorDescription(for: error)
+            completion(
+                false,
+                "System blokuje ponowną rejestrację helpera (Background Task Management). Usuń stare wpisy macUSB z „Login Items / Allow in the Background”, uruchom `sudo sfltool resetbtm`, uruchom ponownie macOS i uruchom tylko wersję z /Applications. Szczegóły: \(details)"
+            )
+            return
+        }
+
+        DispatchQueue.main.async {
+            self.presentRegistrationErrorAlertIfNeeded(error: error, interactive: interactive)
+        }
+        completion(
+            false,
+            "Helper nie odpowiada przez XPC (\(healthDetails)). Nie udało się ponownie zarejestrować helpera: \(diagnosticErrorDescription(for: error))"
+        )
     }
 
     private func evaluateStatus(completion: @escaping (HelperStatusSnapshot) -> Void) {
@@ -1005,6 +1059,27 @@ final class HelperServiceManager: NSObject {
             return true
         }
         return nsError.localizedDescription.localizedCaseInsensitiveContains("operation not permitted")
+    }
+
+    private func diagnosticErrorDescription(for error: Error) -> String {
+        let nsError = error as NSError
+        var details = [
+            "domain=\(nsError.domain)",
+            "code=\(nsError.code)"
+        ]
+        if let debugDescription = nsError.userInfo["NSDebugDescription"] as? String,
+           !debugDescription.isEmpty {
+            details.append("debug=\(debugDescription)")
+        }
+        if let underlyingError = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+            details.append("underlying=\(underlyingError.domain):\(underlyingError.code)")
+        }
+        return "\(nsError.localizedDescription) [\(details.joined(separator: ", "))]"
+    }
+
+    private func isLikelyBackgroundTaskPolicyBlock(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        return nsError.domain == "SMAppServiceErrorDomain" && nsError.code == 1
     }
 
     private func isRunningFromXcodeSession() -> Bool {
