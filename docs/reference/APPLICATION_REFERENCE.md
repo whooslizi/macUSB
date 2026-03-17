@@ -102,6 +102,7 @@ Update when component primitives, token rules, core screen contracts, or cross-v
 - Detection supports modern, legacy, restore-legacy, PPC, Sierra-specific, Catalina, and Mavericks cases.
 - Panther is explicitly unsupported.
 - PPC-related flows are enabled for Tiger/Leopard/Snow Leopard pathways.
+- For `.cdr` and `.iso`, when the selected source image is already mounted manually in macOS, analysis is blocked and a system alert instructs the user to unmount the image and run analysis again.
 
 ### Update Trigger
 Update when compatibility rules, detection heuristics, or version mapping logic changes.

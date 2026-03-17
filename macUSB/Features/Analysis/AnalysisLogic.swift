@@ -5,6 +5,12 @@ import Combine
 import Foundation
 
 final class AnalysisLogic: ObservableObject {
+    private enum ImageReadResult {
+        case success(name: String, rawVersion: String, appURL: URL, mountPath: String)
+        case sourceAlreadyMounted(mountPath: String)
+        case failure
+    }
+
     // MARK: - Published State (moved from SystemAnalysisView)
     @Published var selectedFilePath: String = ""
     @Published var selectedFileUrl: URL?
@@ -28,6 +34,7 @@ final class AnalysisLogic: ObservableObject {
     @Published var isMavericks: Bool = false
     @Published var isUnsupportedSierra: Bool = false
     @Published var shouldShowMavericksDialog: Bool = false
+    @Published var shouldShowAlreadyMountedSourceAlert: Bool = false
     @Published var isPPC: Bool = false
     @Published var legacyArchInfo: String? = nil
     @Published var userSkippedAnalysis: Bool = false
@@ -277,6 +284,7 @@ final class AnalysisLogic: ObservableObject {
         isUnsupportedSierra = false
         isPPC = false
         isMavericks = false
+        shouldShowAlreadyMountedSourceAlert = false
         requiredUSBCapacityGB = nil
 
         let ext = url.pathExtension.lowercased()
@@ -289,12 +297,27 @@ final class AnalysisLogic: ObservableObject {
                 if let path = oldMountPath {
                     let task = Process(); task.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil"); task.arguments = ["detach", path, "-force"]; try? task.run(); task.waitUntilExit()
                 }
-                let result = self.mountAndReadInfo(dmgUrl: url)
+                let shouldDetectAlreadyMountedSource = (ext == "cdr" || ext == "iso")
+                let result = self.mountAndReadInfo(dmgUrl: url, detectPreMountedSource: shouldDetectAlreadyMountedSource)
                 DispatchQueue.main.async {
                     withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                         self.isAnalyzing = false
-                        if let (_, _, _, mp) = result { self.mountedDMGPath = mp } else { self.mountedDMGPath = nil }
-                        if let (name, rawVer, appURL, _) = result {
+                        let mountedReadInfo: (String, String, URL, String)?
+                        let sourceAlreadyMounted: Bool
+                        switch result {
+                        case .success(let name, let rawVersion, let appURL, let mountPath):
+                            mountedReadInfo = (name, rawVersion, appURL, mountPath)
+                            sourceAlreadyMounted = false
+                        case .sourceAlreadyMounted(let mountPath):
+                            mountedReadInfo = nil
+                            sourceAlreadyMounted = true
+                            self.log("Wykryto, że wybrany obraz źródłowy jest już zamontowany: \(mountPath)")
+                        case .failure:
+                            mountedReadInfo = nil
+                            sourceAlreadyMounted = false
+                        }
+                        if let (_, _, _, mp) = mountedReadInfo { self.mountedDMGPath = mp } else { self.mountedDMGPath = nil }
+                        if let (name, rawVer, appURL, _) = mountedReadInfo {
                             let friendlyVer = self.formatMarketingVersion(raw: rawVer, name: name)
                             var cleanName = name
                             cleanName = cleanName.replacingOccurrences(of: "Install ", with: "")
@@ -483,6 +506,26 @@ final class AnalysisLogic: ObservableObject {
                             } else {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { withAnimation(.spring(response: 0.7, dampingFraction: 0.8)) { self.showUnsupportedMessage = true } }
                             }
+                        } else if sourceAlreadyMounted {
+                            self.recognizedVersion = ""
+                            self.sourceAppURL = nil
+                            self.detectedSystemIcon = nil
+                            self.isSystemDetected = false
+                            self.showUSBSection = false
+                            self.showUnsupportedMessage = false
+                            self.needsCodesign = true
+                            self.isLegacyDetected = false
+                            self.isRestoreLegacy = false
+                            self.isCatalina = false
+                            self.isSierra = false
+                            self.isMavericks = false
+                            self.isUnsupportedSierra = false
+                            self.isPPC = false
+                            self.legacyArchInfo = nil
+                            self.userSkippedAnalysis = false
+                            self.requiredUSBCapacityGB = nil
+                            self.shouldShowAlreadyMountedSourceAlert = true
+                            AppLogging.separator()
                         } else {
                             // Użyto String(localized:) aby ten ciąg został wykryty, mimo że jest przypisywany do zmiennej
                             self.recognizedVersion = String(localized: "Nie rozpoznano instalatora")
@@ -869,15 +912,113 @@ final class AnalysisLogic: ObservableObject {
         return nil
     }
 
-    func mountAndReadInfo(dmgUrl: URL) -> (String, String, URL, String)? {
+    private func normalizedImagePath(_ path: String) -> String {
+        URL(fileURLWithPath: path).resolvingSymlinksInPath().standardizedFileURL.path
+    }
+
+    private func mountedPathForAlreadyAttachedImage(sourceURL: URL) -> String? {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+        task.arguments = ["info", "-plist"]
+        let outputPipe = Pipe()
+        let errorPipe = Pipe()
+        task.standardOutput = outputPipe
+        task.standardError = errorPipe
+
+        do {
+            try task.run()
+        } catch {
+            self.logError("Nie udało się uruchomić hdiutil info: \(error.localizedDescription)")
+            return nil
+        }
+        task.waitUntilExit()
+
+        let outputData = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+        if task.terminationStatus != 0 {
+            let stderrText = String(data: errorData, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if stderrText.isEmpty {
+                self.logError("hdiutil info zakończył się błędem (kod \(task.terminationStatus)).")
+            } else {
+                self.logError("hdiutil info zakończył się błędem: \(stderrText)")
+            }
+            return nil
+        }
+
+        guard let plist = try? PropertyListSerialization.propertyList(from: outputData, options: [], format: nil) as? [String: Any],
+              let images = plist["images"] as? [[String: Any]] else {
+            return nil
+        }
+
+        let sourcePath = normalizedImagePath(sourceURL.path)
+        for image in images {
+            guard let imagePath = image["image-path"] as? String else { continue }
+            guard normalizedImagePath(imagePath) == sourcePath else { continue }
+            guard let entities = image["system-entities"] as? [[String: Any]],
+                  let mountPoint = entities.compactMap({ $0["mount-point"] as? String }).first else {
+                continue
+            }
+            return mountPoint
+        }
+
+        return nil
+    }
+
+    private func mountAndReadInfo(dmgUrl: URL, detectPreMountedSource: Bool = false) -> ImageReadResult {
         self.log("Montowanie obrazu (DMG/ISO/CDR)")
+        if detectPreMountedSource,
+           let mountPoint = mountedPathForAlreadyAttachedImage(sourceURL: dmgUrl) {
+            self.log("Wybrany obraz .\(dmgUrl.pathExtension.lowercased()) jest już zamontowany w systemie: \(mountPoint)")
+            return .sourceAlreadyMounted(mountPath: mountPoint)
+        }
+
         let task = Process(); task.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
         task.arguments = ["attach", dmgUrl.path, "-plist", "-nobrowse", "-readonly"]
-        let pipe = Pipe(); task.standardOutput = pipe; try? task.run(); task.waitUntilExit()
+        let pipe = Pipe()
+        let errorPipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = errorPipe
+
+        do {
+            try task.run()
+        } catch {
+            self.logError("Nie udało się uruchomić hdiutil attach: \(error.localizedDescription)")
+            if detectPreMountedSource,
+               let mountPoint = mountedPathForAlreadyAttachedImage(sourceURL: dmgUrl) {
+                self.log("Po błędzie uruchomienia attach wykryto już zamontowany obraz źródłowy: \(mountPoint)")
+                return .sourceAlreadyMounted(mountPath: mountPoint)
+            }
+            return .failure
+        }
+        task.waitUntilExit()
+
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        let errorData = errorPipe.fileHandleForReading.readDataToEndOfFile()
+        let stderrText = String(data: errorData, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if task.terminationStatus != 0 {
+            if stderrText.isEmpty {
+                self.logError("hdiutil attach zakończył się błędem (kod \(task.terminationStatus)).")
+            } else {
+                self.logError("hdiutil attach zakończył się błędem: \(stderrText)")
+            }
+            if detectPreMountedSource,
+               let mountPoint = mountedPathForAlreadyAttachedImage(sourceURL: dmgUrl) {
+                self.log("Po błędzie attach wykryto już zamontowany obraz źródłowy: \(mountPoint)")
+                return .sourceAlreadyMounted(mountPath: mountPoint)
+            }
+            return .failure
+        }
+
         guard let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any], let entities = plist["system-entities"] as? [[String: Any]] else {
             self.logError("Nie udało się odczytać informacji z obrazu")
-            return nil
+            if detectPreMountedSource,
+               let mountPoint = mountedPathForAlreadyAttachedImage(sourceURL: dmgUrl) {
+                self.log("Po nieudanym odczycie plist wykryto już zamontowany obraz źródłowy: \(mountPoint)")
+                return .sourceAlreadyMounted(mountPath: mountPoint)
+            }
+            return .failure
         }
         self.log("Przetwarzanie wyników hdiutil attach (\(entities.count) encji)")
         for e in entities {
@@ -897,7 +1038,7 @@ final class AnalysisLogic: ObservableObject {
                 let mUrl = URL(fileURLWithPath: mp)
                 if let (legacyName, legacyVersion, legacyInstallerURL) = self.readLegacyInstallMacOSXInfo(from: mUrl) {
                     self.log("Rozpoznano instalator legacy z obrazu: name=\(legacyName), version=\(legacyVersion)")
-                    return (legacyName, legacyVersion, legacyInstallerURL, mp)
+                    return .success(name: legacyName, rawVersion: legacyVersion, appURL: legacyInstallerURL, mountPath: mp)
                 }
                 let dirContents = try? FileManager.default.contentsOfDirectory(at: mUrl, includingPropertiesForKeys: nil)
                 if let item = dirContents?.first(where: { $0.pathExtension == "app" }) {
@@ -907,7 +1048,7 @@ final class AnalysisLogic: ObservableObject {
                         let name = (dict["CFBundleDisplayName"] as? String) ?? item.lastPathComponent
                         let ver = (dict["CFBundleShortVersionString"] as? String) ?? "?"
                         self.log("Odczytano Info.plist z obrazu: name=\(name), version=\(ver)")
-                        return (name, ver, item, mp)
+                        return .success(name: name, rawVersion: ver, appURL: item, mountPath: mp)
                     } else {
                         self.logError("Nie udało się odczytać Info.plist z obrazu: \(plistUrl.path)")
                     }
@@ -921,7 +1062,7 @@ final class AnalysisLogic: ObservableObject {
         }
         self.log("Próbowano zamontować obraz i znaleźć pakiet .app oraz plik Info.plist, ale nie zostały odnalezione.")
         self.logError("Nie udało się odczytać informacji z obrazu")
-        return nil
+        return .failure
     }
 
     func mountImageForPPC(dmgUrl: URL) -> String? {
@@ -1026,6 +1167,7 @@ final class AnalysisLogic: ObservableObject {
                 self.isUnsupportedSierra = false
                 self.isPPC = false
                 self.legacyArchInfo = nil
+                self.shouldShowAlreadyMountedSourceAlert = false
                 self.userSkippedAnalysis = false
                 self.shouldShowMavericksDialog = false
                 self.requiredUSBCapacityGB = nil

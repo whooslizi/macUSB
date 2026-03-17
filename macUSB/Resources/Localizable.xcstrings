@@ -19465,6 +19465,172 @@
         }
       }
     },
+    "Wybrany obraz jest już zamontowany" : {
+      "comment" : "Already mounted CDR/ISO alert title",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das ausgewählte Image ist bereits eingebunden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selected image is already mounted"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La imagen seleccionada ya está montada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’image sélectionnée est déjà montée"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’immagine selezionata è già montata"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選択したイメージはすでにマウントされています"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wybrany obraz jest już zamontowany"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A imagem selecionada já está montada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбранный образ уже смонтирован"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seçilen görüntü zaten bağlı"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вибраний образ уже змонтовано"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ảnh đĩa đã chọn đã được gắn kết"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所选镜像已挂载"
+          }
+        }
+      }
+    },
+    "Wybrany plik .cdr lub .iso jest już zamontowany w systemie macOS. Odmontuj ten obraz, a następnie wybierz „Analizuj” ponownie." : {
+      "comment" : "Already mounted CDR/ISO alert description",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die ausgewählte .cdr- oder .iso-Datei ist in macOS bereits eingebunden. Hängen Sie dieses Image aus und wählen Sie anschließend erneut „Analysieren“."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The selected .cdr or .iso file is already mounted in macOS. Unmount this image, then choose “Analyze” again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El archivo .cdr o .iso seleccionado ya está montado en macOS. Desmonta esta imagen y, a continuación, vuelve a seleccionar «Analizar»."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le fichier .cdr ou .iso sélectionné est déjà monté dans macOS. Démontez cette image, puis sélectionnez de nouveau « Analyser »."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il file .cdr o .iso selezionato è già montato in macOS. Smonta questa immagine, quindi seleziona di nuovo «Analizza»."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選択した .cdr または .iso ファイルは、すでに macOS にマウントされています。このイメージをアンマウントしてから、もう一度「解析」を選択してください。"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wybrany plik .cdr lub .iso jest już zamontowany w systemie macOS. Odmontuj ten obraz, a następnie wybierz „Analizuj” ponownie."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O arquivo .cdr ou .iso selecionado já está montado no macOS. Desmonte essa imagem e selecione “Analisar” novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбранный файл .cdr или .iso уже смонтирован в macOS. Отмонтируйте этот образ, затем снова выберите «Анализировать»."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seçilen .cdr veya .iso dosyası macOS'ta zaten bağlı. Bu görüntüyü ayırın ve ardından yeniden “Analiz Et” seçeneğini seçin."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вибраний файл .cdr або .iso вже змонтовано в macOS. Відмонтуйте цей образ, а потім знову виберіть «Аналізувати»."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tệp .cdr hoặc .iso đã chọn đã được gắn kết trong macOS. Hãy tháo gắn kết ảnh đĩa này, sau đó chọn lại “Phân tích”."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所选的 .cdr 或 .iso 文件已在 macOS 中挂载。请先卸载该镜像，然后再次选择“分析”。"
+          }
+        }
+      }
+    },
     "Wybrany system" : {
       "localizations" : {
         "de" : {

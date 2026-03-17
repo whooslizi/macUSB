@@ -10,6 +10,7 @@ This release refines USB target validation by making the minimum required drive 
 
 ### IMPROVEMENTS
 - Improved helper repair with clearer diagnostics and more reliable recovery when macOS blocks background helper activation.
+- When a selected .cdr or .iso source image is already mounted in macOS, analysis now shows a clear system alert
 
 ---
 

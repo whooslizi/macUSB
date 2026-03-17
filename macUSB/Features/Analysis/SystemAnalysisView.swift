@@ -68,6 +68,25 @@ struct SystemAnalysisView: View {
         }
     }
 
+    private func presentAlreadyMountedSourceDialog() {
+        let alert = NSAlert()
+        alert.icon = NSApp.applicationIconImage
+        alert.alertStyle = .warning
+        alert.messageText = String(localized: "Wybrany obraz jest już zamontowany", comment: "Already mounted CDR/ISO alert title")
+        alert.informativeText = String(localized: "Wybrany plik .cdr lub .iso jest już zamontowany w systemie macOS. Odmontuj ten obraz, a następnie wybierz „Analizuj” ponownie.", comment: "Already mounted CDR/ISO alert description")
+        alert.addButton(withTitle: String(localized: "OK"))
+
+        let handleClose: (NSApplication.ModalResponse) -> Void = { _ in
+            logic.shouldShowAlreadyMountedSourceAlert = false
+        }
+
+        if let window = hostingWindow {
+            alert.beginSheetModal(for: window, completionHandler: handleClose)
+        } else {
+            handleClose(alert.runModal())
+        }
+    }
+
     private func presentAPFSDriveDialog() {
         let alert = NSAlert()
         alert.icon = NSApp.applicationIconImage
@@ -398,6 +417,9 @@ struct SystemAnalysisView: View {
         .onChange(of: logic.sourceAppURL) { _ in updateMenuState() }
         .onChange(of: logic.shouldShowMavericksDialog) { show in
             if show { presentMavericksDialog() }
+        }
+        .onChange(of: logic.shouldShowAlreadyMountedSourceAlert) { show in
+            if show { presentAlreadyMountedSourceDialog() }
         }
         .onChange(of: logic.selectedDrive?.url) { _ in
             handleAPFSSelectionChange()
