@@ -157,17 +157,20 @@ final class PrivilegedOperationClient: NSObject {
             }
         }
 
-        guard let proxy = helperProxy(onError: { _ in
-            failHealth(String(localized: "Brak połączenia XPC z helperem"))
+        guard let proxy = helperProxy(onError: { message in
+            failHealth(message)
         }) else {
-            failHealth(String(localized: "Brak połączenia XPC z helperem"))
+            failHealth(String(localized: "Nie udało się utworzyć proxy XPC helpera."))
             return
         }
 
         timeoutWorkItem = DispatchWorkItem { [weak self] in
             self?.resetConnection()
             DispatchQueue.main.async {
-                finishOnce(false, String(localized: "Timeout połączenia XPC z helperem"))
+                finishOnce(
+                    false,
+                    "\(String(localized: "Timeout połączenia XPC z helperem")) (limit: \(String(format: "%.1f", timeout)) s)"
+                )
             }
         }
         if let timeoutWorkItem {
@@ -202,7 +205,7 @@ final class PrivilegedOperationClient: NSObject {
             DispatchQueue.main.async {
                 let message = String(
                     format: String(localized: "Błąd połączenia z helperem: %@"),
-                    error.localizedDescription
+                    self.diagnosticErrorDescription(for: error)
                 )
                 onError(message)
             }
@@ -272,6 +275,22 @@ final class PrivilegedOperationClient: NSObject {
                 )
             }
         }
+    }
+
+    private func diagnosticErrorDescription(for error: Error) -> String {
+        let nsError = error as NSError
+        var details: [String] = ["domain=\(nsError.domain)", "code=\(nsError.code)"]
+
+        if let debugDescription = nsError.userInfo["NSDebugDescription"] as? String,
+           !debugDescription.isEmpty {
+            details.append("debug=\(debugDescription)")
+        }
+
+        if let underlyingError = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+            details.append("underlying=\(underlyingError.domain):\(underlyingError.code)")
+        }
+
+        return "\(nsError.localizedDescription) [\(details.joined(separator: ", "))]"
     }
 
     private func localizedHealthDetails(_ details: String) -> String {
