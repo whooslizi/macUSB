@@ -4,78 +4,78 @@
     "" : {
 
     },
-    "• Do utworzenia instalatora potrzebny jest nośnik USB o pojemności minimum 16 GB" : {
+    "• Do utworzenia instalatora potrzebny jest nośnik USB o pojemności minimum %@ GB" : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• Zum Erstellen des Installers ist ein USB-Laufwerk mit mindestens 16 GB erforderlich"
+            "value" : "• Zum Erstellen des Installers ist ein USB-Laufwerk mit mindestens %@ GB erforderlich"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• A USB drive with a minimum capacity of 16 GB is required to create the installer"
+            "value" : "• A USB drive with a minimum capacity of %@ GB is required to create the installer"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• Se requiere una memoria USB con una capacidad mínima de 16 GB para crear el instalador"
+            "value" : "• Se requiere una memoria USB con una capacidad mínima de %@ GB para crear el instalador"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• Une clé USB d'une capacité minimale de 16 Go est requise pour créer l'installateur"
+            "value" : "• Une clé USB d'une capacité minimale de %@ Go est requise pour créer l'installateur"
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• Per creare il programma di installazione è necessaria un'unità USB con una capacità minima di 16 GB"
+            "value" : "• Per creare il programma di installazione è necessaria un'unità USB con una capacità minima di %@ GB"
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• インストーラを作成するには、最低16GBの容量を持つUSBメモリが必要です"
+            "value" : "• インストーラを作成するには、最低%@GBの容量を持つUSBメモリが必要です"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• É necessário um pen drive com capacidade mínima de 16 GB para criar o instalador"
+            "value" : "• É necessário um pen drive com capacidade mínima de %@ GB para criar o instalador"
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• Для создания установщика требуется USB-накопитель емкостью не менее 16 ГБ"
+            "value" : "• Для создания установщика требуется USB-накопитель емкостью не менее %@ ГБ"
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• Yükleyiciyi oluşturmak için minimum 16 GB kapasiteli bir USB sürücüsüne ihtiyacınız vardır"
+            "value" : "• Yükleyiciyi oluşturmak için minimum %@ GB kapasiteli bir USB sürücüsüne ihtiyacınız vardır"
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• Для створення інсталятора потрібен USB-накопичувач мінімальним об’ємом 16 ГБ"
+            "value" : "• Для створення інсталятора потрібен USB-накопичувач мінімальним об’ємом %@ ГБ"
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• Để tạo bộ cài đặt, bạn cần có ổ USB có dung lượng tối thiểu 16 GB"
+            "value" : "• Để tạo bộ cài đặt, bạn cần có ổ USB có dung lượng tối thiểu %@ GB"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "• 创建安装程序需要至少 16 GB 容量的 U 盘"
+            "value" : "• 创建安装程序需要至少 %@ GB 容量的 U 盘"
           }
         }
       }
@@ -2601,6 +2601,7 @@
       }
     },
     "Brak połączenia XPC z helperem" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -11121,6 +11122,88 @@
         }
       }
     },
+    "Nośniki APFS nie mogą zostać automatycznie przeformatowane przez macUSB. Otwórz Narzędzie dyskowe i sformatuj wybrany nośnik ręcznie do dowolnego formatu innego niż APFS, a następnie wybierz go ponownie." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APFS-Laufwerke können von macUSB nicht automatisch in ein anderes Format umformatiert werden. Öffnen Sie das Festplattendienstprogramm und formatieren Sie das ausgewählte Laufwerk manuell in ein beliebiges anderes Format als APFS. Wählen Sie es anschließend erneut aus."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APFS drives can't be reformatted automatically by macUSB. Open Disk Utility and manually format the selected drive to any non-APFS format, then select it again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macUSB no puede reformatear automáticamente las unidades APFS a otro formato. Abre Utilidad de Discos y formatea manualmente la unidad seleccionada a cualquier formato distinto de APFS; luego selecciónala de nuevo."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Les disques APFS ne peuvent pas être reformatés automatiquement par macUSB vers un autre format. Ouvrez Utilitaire de disque et formatez manuellement le disque sélectionné vers n'importe quel format autre qu'APFS, puis sélectionnez-le de nouveau."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "I dischi APFS non possono essere riformattati automaticamente da macUSB in un altro formato. Apri Utility Disco e formatta manualmente il disco selezionato in qualsiasi formato diverso da APFS, quindi selezionalo di nuovo."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APFS のドライブは macUSB によって自動的に別の形式へ再フォーマットできません。ディスクユーティリティを開き、選択したドライブを APFS 以外の任意の形式に手動でフォーマットしてから、もう一度選択してください。"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nośniki APFS nie mogą zostać automatycznie przeformatowane przez macUSB. Otwórz Narzędzie dyskowe i sformatuj wybrany nośnik ręcznie do dowolnego formatu innego niż APFS, a następnie wybierz go ponownie."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "As unidades APFS não podem ser reformatadas automaticamente pelo macUSB para outro formato. Abra o Utilitário de Disco e formate manualmente a unidade selecionada para qualquer formato diferente de APFS; depois selecione-a novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Диски APFS не могут быть автоматически переформатированы приложением macUSB в другой формат. Откройте Дисковую утилиту и вручную отформатируйте выбранный диск в любой формат, отличный от APFS, затем выберите его снова."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APFS sürücüleri macUSB tarafından başka bir biçime otomatik olarak yeniden biçimlendirilemez. Disk İzlencesi'ni açın ve seçilen sürücüyü APFS dışındaki herhangi bir biçime manuel olarak biçimlendirin, ardından sürücüyü yeniden seçin."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Диски APFS не можна автоматично переформатувати в інший формат за допомогою macUSB. Відкрийте Disk Utility і вручну відформатуйте вибраний диск у будь-який формат, відмінний від APFS, а потім виберіть його знову."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macUSB không thể tự động định dạng lại ổ APFS sang định dạng khác. Hãy mở Tiện ích Ổ đĩa và định dạng thủ công ổ đã chọn sang bất kỳ định dạng nào khác APFS, rồi chọn lại ổ đó."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macUSB 无法将 APFS 磁盘自动重新格式化为其他格式。请打开“磁盘工具”，将所选磁盘手动格式化为任意非 APFS 格式，然后重新选择该磁盘。"
+          }
+        }
+      }
+    },
     "Oczekiwanie na plik .dmg, .iso, .cdr lub .app..." : {
       "localizations" : {
         "de" : {
@@ -15528,6 +15611,9 @@
         }
       }
     },
+    "System blokuje rejestrację helpera (Background Task Management). Usuń stare wpisy macUSB z „Login Items / Allow in the Background”, uruchom `sudo sfltool resetbtm`, uruchom ponownie macOS i uruchom tylko wersję z /Applications." : {
+
+    },
     "System zablokował rejestrację helpera z uruchomienia Xcode. Uruchom raz aplikację z katalogu Applications, zatwierdź działanie helpera w tle, a następnie wróć do testów w Xcode. Szczegóły XPC: %@" : {
       "localizations" : {
         "de" : {
@@ -18828,6 +18914,88 @@
         }
       }
     },
+    "Wybrano nośnik APFS" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APFS-Laufwerk ausgewählt"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APFS Drive Selected"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Se seleccionó una unidad APFS"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un disque APFS a été sélectionné"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "È stato selezionato un disco APFS"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APFSのドライブが選択されました"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wybrano nośnik APFS"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unidade APFS selecionada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбран диск APFS"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "APFS sürücüsü seçildi"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вибрано диск APFS"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Đã chọn ổ APFS"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已选择 APFS 磁盘"
+          }
+        }
+      }
+    },
     "Wybrano nośnik USB 2.0" : {
       "localizations" : {
         "de" : {
@@ -18983,6 +19151,88 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "所选文件夹不存在"
+          }
+        }
+      }
+    },
+    "Wybrany nośnik korzysta z formatu APFS. Aby kontynuować, sformatuj go ręcznie w Narzędziu dyskowym do dowolnego formatu innego niż APFS." : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das ausgewählte Laufwerk verwendet APFS. Um fortzufahren, formatieren Sie es manuell im Festplattendienstprogramm in ein beliebiges anderes Format als APFS."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The selected drive uses APFS. To continue, manually format it in Disk Utility to any non-APFS format."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La unidad seleccionada usa el formato APFS. Para continuar, formatéala manualmente en Utilidad de Discos a cualquier formato distinto de APFS."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le disque sélectionné utilise le format APFS. Pour continuer, formatez-le manuellement dans Utilitaire de disque vers n'importe quel format autre qu'APFS."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il disco selezionato usa il formato APFS. Per continuare, formattalo manualmente in Utility Disco in qualsiasi formato diverso da APFS."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選択したドライブは APFS 形式です。続行するには、ディスクユーティリティで APFS 以外の任意の形式に手動でフォーマットしてください。"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wybrany nośnik korzysta z formatu APFS. Aby kontynuować, sformatuj go ręcznie w Narzędziu dyskowym do dowolnego formatu innego niż APFS."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A unidade selecionada usa o formato APFS. Para continuar, formate-a manualmente no Utilitário de Disco para qualquer formato diferente de APFS."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбранный диск использует формат APFS. Чтобы продолжить, вручную отформатируйте его в Дисковой утилите в любой формат, отличный от APFS."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seçilen sürücü APFS biçimini kullanıyor. Devam etmek için Disk İzlencesi'nde sürücüyü APFS dışındaki herhangi bir biçime manuel olarak biçimlendirin."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вибраний диск використовує формат APFS. Щоб продовжити, вручну відформатуйте його в Disk Utility у будь-який формат, відмінний від APFS."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ổ đã chọn đang dùng định dạng APFS. Để tiếp tục, hãy định dạng thủ công trong Tiện ích Ổ đĩa sang bất kỳ định dạng nào khác APFS."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所选磁盘使用 APFS 格式。若要继续，请在“磁盘工具”中手动将其格式化为任意非 APFS 格式。"
           }
         }
       }
@@ -19211,6 +19461,172 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "所选 U 盘容量太小"
+          }
+        }
+      }
+    },
+    "Wybrany obraz jest już zamontowany" : {
+      "comment" : "Already mounted CDR/ISO alert title",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Das ausgewählte Image ist bereits eingebunden"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Selected image is already mounted"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "La imagen seleccionada ya está montada"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’image sélectionnée est déjà montée"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L’immagine selezionata è già montata"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選択したイメージはすでにマウントされています"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wybrany obraz jest już zamontowany"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A imagem selecionada já está montada"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбранный образ уже смонтирован"
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seçilen görüntü zaten bağlı"
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вибраний образ уже змонтовано"
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ảnh đĩa đã chọn đã được gắn kết"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所选镜像已挂载"
+          }
+        }
+      }
+    },
+    "Wybrany plik .cdr lub .iso jest już zamontowany w systemie macOS. Odmontuj ten obraz, a następnie wybierz „Analizuj” ponownie." : {
+      "comment" : "Already mounted CDR/ISO alert description",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Die ausgewählte .cdr- oder .iso-Datei ist in macOS bereits eingebunden. Hängen Sie dieses Image aus und wählen Sie anschließend erneut „Analysieren“."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The selected .cdr or .iso file is already mounted in macOS. Unmount this image, then choose “Analyze” again."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "El archivo .cdr o .iso seleccionado ya está montado en macOS. Desmonta esta imagen y, a continuación, vuelve a seleccionar «Analizar»."
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le fichier .cdr ou .iso sélectionné est déjà monté dans macOS. Démontez cette image, puis sélectionnez de nouveau « Analyser »."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Il file .cdr o .iso selezionato è già montato in macOS. Smonta questa immagine, quindi seleziona di nuovo «Analizza»."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選択した .cdr または .iso ファイルは、すでに macOS にマウントされています。このイメージをアンマウントしてから、もう一度「解析」を選択してください。"
+          }
+        },
+        "pl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wybrany plik .cdr lub .iso jest już zamontowany w systemie macOS. Odmontuj ten obraz, a następnie wybierz „Analizuj” ponownie."
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "O arquivo .cdr ou .iso selecionado já está montado no macOS. Desmonte essa imagem e selecione “Analisar” novamente."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выбранный файл .cdr или .iso уже смонтирован в macOS. Отмонтируйте этот образ, затем снова выберите «Анализировать»."
+          }
+        },
+        "tr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Seçilen .cdr veya .iso dosyası macOS'ta zaten bağlı. Bu görüntüyü ayırın ve ardından yeniden “Analiz Et” seçeneğini seçin."
+          }
+        },
+        "uk" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Вибраний файл .cdr або .iso вже змонтовано в macOS. Відмонтуйте цей образ, а потім знову виберіть «Аналізувати»."
+          }
+        },
+        "vi" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tệp .cdr hoặc .iso đã chọn đã được gắn kết trong macOS. Hãy tháo gắn kết ảnh đĩa này, sau đó chọn lại “Phân tích”."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所选的 .cdr 或 .iso 文件已在 macOS 中挂载。请先卸载该镜像，然后再次选择“分析”。"
           }
         }
       }
@@ -19755,78 +20171,78 @@
         }
       }
     },
-    "Wymagane jest minimum 16 GB." : {
+    "Wymagane jest minimum %@ GB." : {
       "localizations" : {
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mindestens 16 GB erforderlich."
+            "value" : "Mindestens %@ GB erforderlich."
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Min 16GB required."
+            "value" : "Min %@ GB required."
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mínimo 16 GB requeridos."
+            "value" : "Mínimo %@ GB requeridos."
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minimum 16 Go requis."
+            "value" : "Minimum %@ Go requis."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "È richiesto un minimo di 16 GB."
+            "value" : "È richiesto un minimo di %@ GB."
           }
         },
         "ja" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "最低16GBが必要です。"
+            "value" : "最低%@GBが必要です。"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Mínimo 16 GB necessários."
+            "value" : "Mínimo %@ GB necessários."
           }
         },
         "ru" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Требуется минимум 16 ГБ."
+            "value" : "Требуется минимум %@ ГБ."
           }
         },
         "tr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Minimum 16 GB gereklidir."
+            "value" : "Minimum %@ GB gereklidir."
           }
         },
         "uk" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Необхідно мінімум 16 ГБ."
+            "value" : "Необхідно мінімум %@ ГБ."
           }
         },
         "vi" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Yêu cầu tối thiểu 16 GB."
+            "value" : "Yêu cầu tối thiểu %@ GB."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "至少需要 16 GB。"
+            "value" : "至少需要 %@ GB。"
           }
         }
       }

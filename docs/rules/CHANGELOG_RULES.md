@@ -6,10 +6,10 @@ This file defines how to write release notes in `CHANGELOG.md`.
 
 - `CHANGELOG.md` should contain release entries only (no writing instructions).
 - Write changelogs in English.
-- Verify each entry against shipped behavior and `docs/documents/development/DEVELOPMENT.md`.
+- Verify each entry against shipped behavior and `docs/reference/APPLICATION_REFERENCE.md`.
 - Keep wording concise and suitable for GitHub Releases.
 - Changes with only marginal product impact do not have to be listed in a release entry.
-- Small copy-only edits can be grouped under generic labels such as `Poprawki tłumaczeń` or general text fixes.
+- Small copy-only edits can be grouped under generic labels such as `Translation fixes` or general text fixes.
 - Changelog bullets must stay user-friendly and readable; avoid low-level technical jargon when the change was not significant.
 
 ## Release Entry Format
@@ -30,6 +30,8 @@ This file defines how to write release notes in `CHANGELOG.md`.
 - Do not use file-based screen names (for example class/file names); describe screens functionally (for example selection screen, analysis screen, summary screen).
 - When behavior is conditional, state the condition clearly (for example permissions, toggles, runtime state).
 - Use consistent menu path formatting: `Options → ...`, `Help → ...`, `Tools → ...`.
+- If a release change is one coherent topic, document it as one bullet; split into multiple bullets only when the release contains clearly separate user-facing topics.
+- Write every bullet as a simple, user-friendly summary suitable for GitHub Releases; avoid implementation details and deep technical breakdowns.
 
 ## Tone and Scope
 
