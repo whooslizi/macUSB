@@ -7724,6 +7724,7 @@
       }
     },
     "Lokalizacja aplikacji: poza /Applications" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -8267,6 +8268,12 @@
           }
         }
       }
+    },
+    "Menedżer pobierania macOS" : {
+
+    },
+    "Menedżer pobierania systemów macOS" : {
+
     },
     "Napraw helpera" : {
       "localizations" : {
@@ -11971,6 +11978,9 @@
         }
       }
     },
+    "Placeholder: tutaj pojawi się lista systemów macOS/OS X dostępnych do pobrania z oficjalnych serwerów Apple." : {
+
+    },
     "Pobierz" : {
       "localizations" : {
         "de" : {
@@ -12046,6 +12056,9 @@
           }
         }
       }
+    },
+    "Pobierz instalator macOS..." : {
+
     },
     "Podłącz nośnik USB i poczekaj na wykrycie..." : {
       "localizations" : {

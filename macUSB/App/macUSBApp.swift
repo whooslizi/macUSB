@@ -257,6 +257,12 @@ struct macUSBApp: App {
             }
             CommandMenu(String(localized: "Narzędzia")) {
                 Button {
+                    MacOSDownloaderWindowManager.shared.present()
+                } label: {
+                    Label(String(localized: "Pobierz instalator macOS..."), systemImage: "square.and.arrow.down")
+                }
+                Divider()
+                Button {
                     if let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.DiskUtility") {
                         NSWorkspace.shared.openApplication(at: appURL, configuration: NSWorkspace.OpenConfiguration(), completionHandler: nil)
                     } else {

@@ -88,6 +88,7 @@
 				App/macUSBApp.swift,
 				Features/Analysis/AnalysisLogic.swift,
 				Features/Analysis/SystemAnalysisView.swift,
+				Features/Downloader/MacOSDownloaderWindow.swift,
 				Features/Finish/FinishUSBView.swift,
 				Features/Installation/CreationProgressView.swift,
 				Features/Installation/CreatorHelperLogic.swift,
@@ -120,6 +121,7 @@
 			membershipExceptions = (
 				App/ContentView.swift,
 				App/macUSBApp.swift,
+				Features/Downloader/MacOSDownloaderWindow.swift,
 				Features/Installation/CreationProgressView.swift,
 				Features/Installation/CreatorHelperLogic.swift,
 				Features/Installation/CreatorLogic.swift,
