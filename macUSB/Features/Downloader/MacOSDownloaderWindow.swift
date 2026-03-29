@@ -226,8 +226,8 @@ struct MacOSDownloaderWindowView: View {
                     .font(.body.weight(.medium))
                     .foregroundStyle(.primary)
 
-                if shouldShowBuild(entry.build) {
-                    Text(entry.build)
+                if let secondaryText = entrySecondaryText(for: entry) {
+                    Text(secondaryText)
                         .font(.caption2.italic())
                         .foregroundStyle(.secondary)
                 }
@@ -348,6 +348,23 @@ struct MacOSDownloaderWindowView: View {
     private func shouldShowBuild(_ build: String) -> Bool {
         let trimmed = build.trimmingCharacters(in: .whitespacesAndNewlines)
         return !trimmed.isEmpty && trimmed.caseInsensitiveCompare("N/A") != .orderedSame
+    }
+
+    private func entrySecondaryText(for entry: MacOSInstallerEntry) -> String? {
+        let sizeText = entry.installerSizeText?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedSize = (sizeText?.isEmpty == false) ? sizeText : nil
+        let buildText = shouldShowBuild(entry.build) ? entry.build : nil
+
+        switch (normalizedSize, buildText) {
+        case let (.some(size), .some(build)):
+            return "\(size) - \(build)"
+        case let (.some(size), nil):
+            return size
+        case let (nil, .some(build)):
+            return build
+        case (nil, nil):
+            return nil
+        }
     }
 
     private func matchesMajorVersionIconFile(_ fileName: String, majorVersionKey: String, alias: String) -> Bool {

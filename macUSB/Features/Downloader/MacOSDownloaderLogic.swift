@@ -8,10 +8,23 @@ struct MacOSInstallerEntry: Identifiable, Hashable {
     let name: String
     let version: String
     let build: String
+    let installerSizeText: String?
     let sourceURL: URL
 
     var displayTitle: String {
         "\(name) \(version) (\(build))"
+    }
+
+    func with(installerSizeText: String?) -> MacOSInstallerEntry {
+        MacOSInstallerEntry(
+            id: id,
+            family: family,
+            name: name,
+            version: version,
+            build: build,
+            installerSizeText: installerSizeText,
+            sourceURL: sourceURL
+        )
     }
 }
 
@@ -145,6 +158,7 @@ private struct MacOSCatalogService {
     private struct CatalogCandidate {
         let distributionURL: URL
         let sourceURL: URL
+        let catalogSizeBytes: Int64?
     }
 
     private struct LegacySupportEntry {
@@ -157,6 +171,8 @@ private struct MacOSCatalogService {
         static let catalogURL = URL(string: "https://swscan.apple.com/content/catalogs/others/index-15-14-13-12-10.16-10.15-10.14-10.13-10.12-10.11-10.10-10.9-mountainlion-lion-snowleopard-leopard.merged-1.sucatalog.gz")!
         static let supportArticleURL = URL(string: "https://support.apple.com/en-us/102662")!
         static let requestTimeout: TimeInterval = 30
+        static let byteRangeProbe = "bytes=0-0"
+        static let downloadableExtensions: Set<String> = ["pkg", "dmg", "ipsw"]
         static let allowedHosts: Set<String> = [
             "swscan.apple.com",
             "swdist.apple.com",
@@ -168,11 +184,11 @@ private struct MacOSCatalogService {
         ]
 
         static let legacySupportMap: [LegacySupportEntry] = [
-            LegacySupportEntry(label: "Sierra 10.12", name: "macOS Sierra", version: "10.12"),
-            LegacySupportEntry(label: "El Capitan 10.11", name: "OS X El Capitan", version: "10.11"),
-            LegacySupportEntry(label: "Yosemite 10.10", name: "OS X Yosemite", version: "10.10"),
-            LegacySupportEntry(label: "Mountain Lion 10.8", name: "OS X Mountain Lion", version: "10.8"),
-            LegacySupportEntry(label: "Lion 10.7", name: "Mac OS X Lion", version: "10.7")
+            LegacySupportEntry(label: "Sierra 10.12", name: "macOS Sierra", version: "10.12.6"),
+            LegacySupportEntry(label: "El Capitan 10.11", name: "OS X El Capitan", version: "10.11.6"),
+            LegacySupportEntry(label: "Yosemite 10.10", name: "OS X Yosemite", version: "10.10.5"),
+            LegacySupportEntry(label: "Mountain Lion 10.8", name: "OS X Mountain Lion", version: "10.8.5"),
+            LegacySupportEntry(label: "Lion 10.7", name: "Mac OS X Lion", version: "10.7.5")
         ]
     }
 
@@ -223,7 +239,12 @@ private struct MacOSCatalogService {
 
         let uniqueEntries = deduplicated(entries)
         AppLogging.info("Po deduplikacji pozostalo \(uniqueEntries.count) wpisow stable.", category: "Downloader")
-        return uniqueEntries
+
+        phase(String(localized: "Sprawdzanie rozmiarow instalatorow..."))
+        AppLogging.info("Rozpoczecie sprawdzania rozmiarow instalatorow.", category: "Downloader")
+        let entriesWithSizes = try await enrichedWithInstallerSizes(uniqueEntries)
+        AppLogging.info("Zakonczono sprawdzanie rozmiarow instalatorow.", category: "Downloader")
+        return entriesWithSizes
     }
 
     private func parseCatalogCandidates(from data: Data) throws -> [CatalogCandidate] {
@@ -254,8 +275,13 @@ private struct MacOSCatalogService {
             }
 
             let sourceURL = preferredInstallAssistantPackageURL(from: product) ?? distributionURL
+            let catalogSizeBytes = summedPackageSize(from: product)
             candidates.append(
-                CatalogCandidate(distributionURL: distributionURL, sourceURL: sourceURL)
+                CatalogCandidate(
+                    distributionURL: distributionURL,
+                    sourceURL: sourceURL,
+                    catalogSizeBytes: catalogSizeBytes
+                )
             )
         }
 
@@ -293,6 +319,33 @@ private struct MacOSCatalogService {
         return nil
     }
 
+    private func summedPackageSize(from product: [String: Any]) -> Int64? {
+        guard let packages = product["Packages"] as? [[String: Any]], !packages.isEmpty else {
+            return nil
+        }
+
+        var totalBytes: Int64 = 0
+        for package in packages {
+            if let value = package["Size"] as? NSNumber {
+                totalBytes += max(0, value.int64Value)
+                continue
+            }
+            if let value = package["Size"] as? Int64 {
+                totalBytes += max(0, value)
+                continue
+            }
+            if let value = package["Size"] as? Int {
+                totalBytes += max(0, Int64(value))
+                continue
+            }
+            if let value = package["Size"] as? String, let parsed = Int64(value) {
+                totalBytes += max(0, parsed)
+            }
+        }
+
+        return totalBytes > 0 ? totalBytes : nil
+    }
+
     private func parseDistributionCandidate(_ candidate: CatalogCandidate) async throws -> MacOSInstallerEntry? {
         let data = try await fetchData(from: candidate.distributionURL)
         guard let distText = String(data: data, encoding: .utf8) else { return nil }
@@ -316,6 +369,7 @@ private struct MacOSCatalogService {
             name: name,
             version: version,
             build: build,
+            installerSizeText: candidate.catalogSizeBytes.map(formatSizeInGigabytes),
             sourceURL: candidate.sourceURL
         )
     }
@@ -348,6 +402,7 @@ private struct MacOSCatalogService {
                     name: legacy.name,
                     version: legacy.version,
                     build: "N/A",
+                    installerSizeText: nil,
                     sourceURL: sourceURL
                 )
             )
@@ -371,6 +426,181 @@ private struct MacOSCatalogService {
         return result
     }
 
+    private func enrichedWithInstallerSizes(_ entries: [MacOSInstallerEntry]) async throws -> [MacOSInstallerEntry] {
+        var enriched: [MacOSInstallerEntry] = []
+        enriched.reserveCapacity(entries.count)
+
+        for entry in entries {
+            try Task.checkCancellation()
+
+            if entry.installerSizeText != nil {
+                enriched.append(entry)
+                continue
+            }
+
+            let sizeText: String?
+            do {
+                sizeText = try await fetchInstallerSizeTextIfAvailable(from: entry.sourceURL)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                AppLogging.info(
+                    "Nie udalo sie odczytac rozmiaru dla \(entry.sourceURL.absoluteString): \(error.localizedDescription)",
+                    category: "Downloader"
+                )
+                sizeText = nil
+            }
+
+            enriched.append(entry.with(installerSizeText: sizeText))
+        }
+
+        return enriched
+    }
+
+    private func fetchInstallerSizeTextIfAvailable(from url: URL) async throws -> String? {
+        try Task.checkCancellation()
+        guard isAllowedHost(url) else { return nil }
+
+        for probeURL in sizeProbeURLs(for: url) {
+            try Task.checkCancellation()
+            guard isAllowedHost(probeURL) else { continue }
+            let bytes: Int64?
+            do {
+                bytes = try await fetchContentLength(from: probeURL)
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                AppLogging.info(
+                    "Nie udalo sie pobrac naglowkow rozmiaru z \(probeURL.absoluteString): \(error.localizedDescription)",
+                    category: "Downloader"
+                )
+                continue
+            }
+
+            guard let bytes, bytes > 0 else { continue }
+            return formatSizeInGigabytes(bytes: bytes)
+        }
+
+        return nil
+    }
+
+    private func isDownloadAssetURL(_ url: URL) -> Bool {
+        Constants.downloadableExtensions.contains(url.pathExtension.lowercased())
+    }
+
+    private func sizeProbeURLs(for url: URL) -> [URL] {
+        var result: [URL] = []
+        var seen: Set<String> = []
+
+        func append(_ candidate: URL?) {
+            guard let candidate else { return }
+            guard seen.insert(candidate.absoluteString).inserted else { return }
+            result.append(candidate)
+        }
+
+        // Prefer HTTPS and newer updates host first for legacy support links.
+        if var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            if components.scheme?.lowercased() == "http" {
+                components.scheme = "https"
+                append(components.url)
+            }
+        }
+        if var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+           let host = components.host?.lowercased() {
+            components.scheme = "https"
+            if host == "updates-http.cdn-apple.com" {
+                components.host = "updates.cdn-apple.com"
+                append(components.url)
+            } else if host == "updates.cdn-apple.com" {
+                components.host = "updates-http.cdn-apple.com"
+                append(components.url)
+            }
+        }
+
+        append(url)
+
+        return result
+    }
+
+    private func fetchContentLength(from url: URL) async throws -> Int64? {
+        do {
+            if let headLength = try await fetchContentLengthWithHEAD(from: url) {
+                return headLength
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            AppLogging.info(
+                "HEAD nieudany dla \(url.absoluteString): \(error.localizedDescription)",
+                category: "Downloader"
+            )
+        }
+
+        do {
+            return try await fetchContentLengthWithRangeProbe(from: url)
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            AppLogging.info(
+                "Range probe nieudany dla \(url.absoluteString): \(error.localizedDescription)",
+                category: "Downloader"
+            )
+            return nil
+        }
+    }
+
+    private func fetchContentLengthWithHEAD(from url: URL) async throws -> Int64? {
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        request.timeoutInterval = Constants.requestTimeout
+
+        let (_, response) = try await session.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else { return nil }
+        guard (200...299).contains(httpResponse.statusCode) else { return nil }
+        let resolvedURL = httpResponse.url ?? url
+        guard isAllowedHost(resolvedURL), isDownloadAssetURL(resolvedURL) else { return nil }
+        return contentLength(from: httpResponse)
+    }
+
+    private func fetchContentLengthWithRangeProbe(from url: URL) async throws -> Int64? {
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        request.timeoutInterval = Constants.requestTimeout
+        request.setValue(Constants.byteRangeProbe, forHTTPHeaderField: "Range")
+
+        let (_, response) = try await session.bytes(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else { return nil }
+        guard (200...299).contains(httpResponse.statusCode) || httpResponse.statusCode == 206 else { return nil }
+        let resolvedURL = httpResponse.url ?? url
+        guard isAllowedHost(resolvedURL), isDownloadAssetURL(resolvedURL) else { return nil }
+        return contentLength(from: httpResponse)
+    }
+
+    private func contentLength(from response: HTTPURLResponse) -> Int64? {
+        if let contentRangeHeader = response.value(forHTTPHeaderField: "Content-Range"),
+           let slashIndex = contentRangeHeader.lastIndex(of: "/") {
+            let totalLength = contentRangeHeader[contentRangeHeader.index(after: slashIndex)...]
+            if let parsed = Int64(totalLength), parsed > 0 {
+                return parsed
+            }
+        }
+
+        if let contentLengthHeader = response.value(forHTTPHeaderField: "Content-Length"),
+           let contentLength = Int64(contentLengthHeader),
+           contentLength > 0 {
+            return contentLength
+        }
+
+        return nil
+    }
+
+    private func formatSizeInGigabytes(bytes: Int64) -> String {
+        let sizeInGigabytes = Double(bytes) / 1_000_000_000
+        return String(format: "%.2fGB", locale: Locale(identifier: "en_US_POSIX"), sizeInGigabytes)
+    }
+
     private func fetchData(from url: URL) async throws -> Data {
         try Task.checkCancellation()
         guard isAllowedHost(url) else {
@@ -391,7 +621,16 @@ private struct MacOSCatalogService {
 
     private func isAllowedHost(_ url: URL) -> Bool {
         guard let host = url.host?.lowercased() else { return false }
-        return Constants.allowedHosts.contains(host)
+        if Constants.allowedHosts.contains(host) {
+            return true
+        }
+        if host == "apple.com" || host.hasSuffix(".apple.com") {
+            return true
+        }
+        if host == "cdn-apple.com" || host.hasSuffix(".cdn-apple.com") {
+            return true
+        }
+        return false
     }
 
     private func extractFirstMatch(in text: String, pattern: String) -> String? {
