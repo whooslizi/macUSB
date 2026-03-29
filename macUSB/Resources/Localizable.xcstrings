@@ -4,9 +4,6 @@
     "" : {
 
     },
-    "(%@)" : {
-
-    },
     "%@ %@" : {
       "localizations" : {
         "pl" : {
@@ -4392,6 +4389,9 @@
           }
         }
       }
+    },
+    "Gotowe" : {
+
     },
     "Helper działa poprawnie" : {
       "localizations" : {
@@ -11561,6 +11561,9 @@
         }
       }
     },
+    "Opcje listy systemów" : {
+
+    },
     "Operacja nie powiodła się" : {
       "localizations" : {
         "de" : {
@@ -12184,6 +12187,9 @@
           }
         }
       }
+    },
+    "Pokaż wszystkie dostępne wersje" : {
+
     },
     "Połączenie z helperem zostało przerwane." : {
       "localizations" : {

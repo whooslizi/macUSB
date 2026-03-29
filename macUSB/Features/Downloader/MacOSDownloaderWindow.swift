@@ -78,6 +78,8 @@ struct MacOSDownloaderWindowView: View {
     let onClose: () -> Void
 
     @StateObject private var logic = MacOSDownloaderLogic()
+    @State private var isOptionsPresented = false
+    @State private var showAllAvailableVersions = false
 
     var body: some View {
         ZStack {
@@ -95,8 +97,24 @@ struct MacOSDownloaderWindowView: View {
                 .macUSBPanelSurface(.subtle)
 
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Lista systemów dostępnych do pobrania")
-                        .font(.headline)
+                    HStack(alignment: .center, spacing: 10) {
+                        Text("Lista systemów dostępnych do pobrania")
+                            .font(.headline)
+
+                        Spacer()
+
+                        Button {
+                            isOptionsPresented = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "slider.horizontal.3")
+                                Text("Opcje")
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                        }
+                        .macUSBSecondaryButtonStyle()
+                    }
 
                     installerListArea
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -131,6 +149,9 @@ struct MacOSDownloaderWindowView: View {
                     .transition(.opacity)
                     .zIndex(2)
             }
+        }
+        .sheet(isPresented: $isOptionsPresented) {
+            MacOSDownloaderOptionsSheetView(showAllAvailableVersions: $showAllAvailableVersions)
         }
         .task {
             logic.startDiscovery()
@@ -181,7 +202,7 @@ struct MacOSDownloaderWindowView: View {
     private var installerSectionsView: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
-                ForEach(logic.familyGroups) { group in
+                ForEach(visibleFamilyGroups) { group in
                     VStack(alignment: .leading, spacing: 8) {
                         Text(group.family)
                             .font(.subheadline.weight(.semibold))
@@ -200,24 +221,37 @@ struct MacOSDownloaderWindowView: View {
         HStack(alignment: .center, spacing: 12) {
             installerIconView(for: entry)
 
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+            VStack(alignment: .leading, spacing: 1) {
                 Text("\(entry.name) \(entry.version)")
                     .font(.body.weight(.medium))
                     .foregroundStyle(.primary)
 
                 if shouldShowBuild(entry.build) {
-                    Text("(\(entry.build))")
-                        .font(.subheadline.italic())
+                    Text(entry.build)
+                        .font(.caption2.italic())
                         .foregroundStyle(.secondary)
                 }
             }
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: 40, alignment: .leading)
         .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.vertical, 6)
         .macUSBPanelSurface(.subtle)
+    }
+
+    private var visibleFamilyGroups: [MacOSInstallerFamilyGroup] {
+        guard !showAllAvailableVersions else {
+            return logic.familyGroups
+        }
+
+        return logic.familyGroups.compactMap { group in
+            guard let newest = group.entries.first else {
+                return nil
+            }
+            return MacOSInstallerFamilyGroup(family: group.family, entries: [newest])
+        }
     }
 
     @ViewBuilder
@@ -293,11 +327,12 @@ struct MacOSDownloaderWindowView: View {
     }
 
     private func normalizedSystemNameKey(from name: String) -> String {
-        let stripped = name
-            .replacingOccurrences(of: "macOS ", with: "")
-            .replacingOccurrences(of: "OS X ", with: "")
-            .replacingOccurrences(of: "Mac OS X ", with: "")
-            .lowercased()
+        let stripped = name.replacingOccurrences(
+            of: #"^(Install\s+)?(Mac\s+OS\s+X|OS\s+X|macOS)\s+"#,
+            with: "",
+            options: [.regularExpression, .caseInsensitive]
+        )
+        .lowercased()
 
         let components = stripped.split { !$0.isLetter && !$0.isNumber }
         return components.joined(separator: "_")
@@ -391,5 +426,36 @@ struct MacOSDownloaderWindowView: View {
             .macUSBPanelSurface(.neutral)
             .shadow(color: Color.black.opacity(0.20), radius: 16, x: 0, y: 8)
         }
+    }
+}
+
+private struct MacOSDownloaderOptionsSheetView: View {
+    @Binding var showAllAvailableVersions: Bool
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Opcje listy systemów")
+                .font(.headline)
+
+            Toggle("Pokaż wszystkie dostępne wersje", isOn: $showAllAvailableVersions)
+                .toggleStyle(.checkbox)
+
+            Spacer(minLength: 0)
+
+            HStack {
+                Spacer()
+                Button {
+                    dismiss()
+                } label: {
+                    Text("Gotowe")
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
+                }
+                .macUSBPrimaryButtonStyle()
+            }
+        }
+        .padding(18)
+        .frame(width: 360, height: 170)
     }
 }
