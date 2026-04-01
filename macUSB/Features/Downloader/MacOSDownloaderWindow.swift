@@ -1,5 +1,7 @@
 import SwiftUI
 import AppKit
+import Combine
+import UserNotifications
 
 @MainActor
 final class MacOSDownloaderWindowManager {
@@ -78,16 +80,20 @@ struct MacOSDownloaderWindowView: View {
     let onClose: () -> Void
 
     @StateObject private var logic = MacOSDownloaderLogic()
+    @StateObject private var downloadFlowModel = MontereyDownloadPlaceholderFlowModel()
     @State private var isOptionsPresented = false
     @State private var showAllAvailableVersions = false
     @State private var selectedInstallerID: String?
+    @State private var activeDownloadEntry: MacOSInstallerEntry?
 
     var body: some View {
         VStack(alignment: .leading, spacing: MacUSBDesignTokens.sectionGroupSpacing) {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Menedżer pobierania macOS")
                     .font(.title3.weight(.semibold))
-                Text("Lista oficjalnych instalatorów macOS i OS X dostępnych na serwerach Apple.")
+                Text(activeDownloadEntry == nil
+                     ? "Wybierz oficjalny instalator macOS lub OS X z serwerów Apple."
+                     : "Pobieranie i przygotowanie instalatora przebiega etapami. Postęp procesu jest widoczny poniżej.")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -96,30 +102,10 @@ struct MacOSDownloaderWindowView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .macUSBPanelSurface(.subtle)
 
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .center, spacing: 10) {
-                    Text("Lista systemów dostępnych do pobrania")
-                        .font(.headline)
-
-                    Spacer()
-
-                    Button {
-                        isOptionsPresented = true
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "slider.horizontal.3")
-                            Text("Opcje")
-                        }
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                    }
-                    .macUSBSecondaryButtonStyle()
-                    .disabled(isDiscoveryInProgress)
-                    .opacity(isDiscoveryInProgress ? 0.65 : 1.0)
-                }
-
-                installerListArea
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            if let activeDownloadEntry {
+                downloaderProgressSection(for: activeDownloadEntry)
+            } else {
+                installerSelectionSection
             }
         }
         .padding(.horizontal, MacUSBDesignTokens.contentHorizontalPadding)
@@ -157,8 +143,297 @@ struct MacOSDownloaderWindowView: View {
         .onChange(of: showAllAvailableVersions) {
             ensureSelectedEntryIsVisible()
         }
+        .onChange(of: downloadFlowModel.isFinished) {
+            guard downloadFlowModel.isFinished, let activeDownloadEntry else { return }
+            sendDownloadCompletionNotificationIfInactive(for: activeDownloadEntry)
+        }
         .onDisappear {
             logic.cancelDiscovery(updateState: false)
+            downloadFlowModel.stop()
+        }
+    }
+
+    private var installerSelectionSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .center, spacing: 10) {
+                Text("Lista systemów dostępnych do pobrania")
+                    .font(.headline)
+
+                Spacer()
+
+                Button {
+                    isOptionsPresented = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "slider.horizontal.3")
+                        Text("Opcje")
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                }
+                .macUSBSecondaryButtonStyle()
+                .disabled(isDiscoveryInProgress)
+                .opacity(isDiscoveryInProgress ? 0.65 : 1.0)
+            }
+
+            installerListArea
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    private func downloaderProgressSection(for entry: MacOSInstallerEntry) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Pobieranie systemu")
+                .font(.headline)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: MacUSBDesignTokens.sectionGroupSpacing) {
+                    StatusCard(tone: .subtle, density: .compact) {
+                        HStack(spacing: 12) {
+                            installerIconView(for: entry)
+                                .frame(width: 36, height: 36)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("\(entry.name) \(entry.version)")
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+
+                                if shouldShowBuild(entry.build) {
+                                    Text(entry.build)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            Spacer()
+                        }
+                    }
+
+                    if downloadFlowModel.isFinished {
+                        downloadSummaryView
+                    } else {
+                        downloadStageSectionDivider
+
+                        VStack(spacing: 10) {
+                            ForEach(MontereyDownloadPlaceholderFlowStage.allCases, id: \.self) { stage in
+                                downloadStageRow(for: stage)
+                            }
+                        }
+                    }
+                }
+                .padding(MacUSBDesignTokens.panelInnerPadding)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .macUSBPanelSurface(.neutral)
+        }
+    }
+
+    private var downloadSummaryView: some View {
+        StatusCard(tone: .success) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(.green)
+                    Text("Pobieranie ukończone")
+                        .font(.headline)
+                }
+
+                downloadSummaryMetricRow(
+                    title: "Pobrane dane",
+                    value: downloadFlowModel.summaryTotalDownloadedText
+                )
+                downloadSummaryMetricRow(
+                    title: "Średnia szybkość transferu",
+                    value: downloadFlowModel.summaryAverageSpeedText
+                )
+                downloadSummaryMetricRow(
+                    title: "Łączny czas pobierania",
+                    value: downloadFlowModel.summaryDurationText
+                )
+
+                HStack {
+                    Spacer()
+                    Button {
+                        openPlannedInstallerFolder()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "folder.fill")
+                            Text("Pokaż w Finderze")
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                    }
+                    .macUSBSecondaryButtonStyle()
+                }
+                .padding(.top, 6)
+            }
+        }
+    }
+
+    private func downloadSummaryMetricRow(title: String, value: String) -> some View {
+        HStack {
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(value)
+                .font(.subheadline.monospacedDigit().weight(.semibold))
+                .foregroundStyle(.primary)
+        }
+    }
+
+    private var downloadStageSectionDivider: some View {
+        HStack(spacing: 10) {
+            Capsule()
+                .fill(Color.secondary.opacity(0.20))
+                .frame(height: 1)
+            Text("Etapy pobierania")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Capsule()
+                .fill(Color.secondary.opacity(0.20))
+                .frame(height: 1)
+        }
+        .padding(.horizontal, 2)
+        .padding(.vertical, 2)
+    }
+
+    @ViewBuilder
+    private func downloadStageRow(for stage: MontereyDownloadPlaceholderFlowStage) -> some View {
+        let stageState = downloadFlowModel.visualState(for: stage)
+
+        switch stageState {
+        case .pending:
+            StatusCard(tone: .subtle, density: .compact) {
+                HStack(spacing: 12) {
+                    Image(systemName: iconForDownloadStage(stage))
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 24)
+                    Text(downloadStageTitle(for: stage))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+            }
+
+        case .active:
+            StatusCard(
+                tone: .active,
+                cornerRadius: MacUSBDesignTokens.prominentPanelCornerRadius(for: currentVisualMode())
+            ) {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(spacing: 12) {
+                        Image(systemName: iconForDownloadStage(stage))
+                            .font(.title3)
+                            .foregroundColor(.accentColor)
+                            .frame(width: 24)
+                        Text(downloadStageTitle(for: stage))
+                            .font(.headline)
+                        Spacer()
+                    }
+
+                    if let description = downloadStageDescription(for: stage) {
+                        Text(description)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    if let progress = downloadStageProgress(for: stage) {
+                        ProgressView(value: progress)
+                            .progressViewStyle(.linear)
+                    } else {
+                        ProgressView()
+                            .progressViewStyle(.linear)
+                    }
+
+                    if stage == .downloading {
+                        HStack {
+                            Text(downloadFlowModel.downloadSpeedText)
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text(downloadFlowModel.downloadTransferredText)
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+            }
+
+        case .completed:
+            StatusCard(tone: .neutral, density: .compact) {
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(.green)
+                        .frame(width: 24)
+                    Text(downloadStageTitle(for: stage))
+                        .font(.subheadline)
+                    Spacer()
+                }
+            }
+        }
+    }
+
+    private func iconForDownloadStage(_ stage: MontereyDownloadPlaceholderFlowStage) -> String {
+        switch stage {
+        case .connection:
+            return "network"
+        case .downloading:
+            return "arrow.down.circle.fill"
+        case .verifying:
+            return "checklist"
+        case .buildingInstaller:
+            return "shippingbox.fill"
+        case .cleanup:
+            return "trash.fill"
+        }
+    }
+
+    private func downloadStageTitle(for stage: MontereyDownloadPlaceholderFlowStage) -> String {
+        switch stage {
+        case .connection:
+            return "Sprawdzanie połączenia"
+        case .downloading:
+            return "Pobieranie plików - \(downloadFlowModel.downloadCurrentIndex)/\(downloadFlowModel.downloadTotal)"
+        case .verifying:
+            return "Weryfikowanie plików - \(downloadFlowModel.verifyCurrentIndex)/\(downloadFlowModel.verifyTotal)"
+        case .buildingInstaller:
+            return "Użycie pakietu pkg do zbudowania instalatora .app"
+        case .cleanup:
+            return "Czyszczenie plików tymczasowych"
+        }
+    }
+
+    private func downloadStageDescription(for stage: MontereyDownloadPlaceholderFlowStage) -> String? {
+        switch stage {
+        case .connection:
+            return downloadFlowModel.connectionStatusText
+        case .downloading:
+            return downloadFlowModel.downloadFileName
+        case .verifying:
+            return downloadFlowModel.verifyFileName
+        case .buildingInstaller:
+            return downloadFlowModel.buildStatusText
+        case .cleanup:
+            return downloadFlowModel.cleanupStatusText
+        }
+    }
+
+    private func downloadStageProgress(for stage: MontereyDownloadPlaceholderFlowStage) -> Double? {
+        switch stage {
+        case .connection:
+            return nil
+        case .downloading:
+            return downloadFlowModel.downloadProgress
+        case .verifying:
+            return downloadFlowModel.verifyProgress
+        case .buildingInstaller:
+            return downloadFlowModel.buildProgress
+        case .cleanup:
+            return downloadFlowModel.cleanupProgress
         }
     }
 
@@ -281,6 +556,7 @@ struct MacOSDownloaderWindowView: View {
 
     private func installerEntryRow(_ entry: MacOSInstallerEntry) -> some View {
         let isSelected = selectedInstallerID == entry.id
+        let supportsPlaceholderDownload = supportsMontereyPlaceholderDownload(entry)
 
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 12) {
@@ -317,6 +593,8 @@ struct MacOSDownloaderWindowView: View {
                         .padding(.vertical, 7)
                     }
                     .macUSBPrimaryButtonStyle()
+                    .disabled(!supportsPlaceholderDownload)
+                    .opacity(supportsPlaceholderDownload ? 1 : 0.6)
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -475,10 +753,26 @@ struct MacOSDownloaderWindowView: View {
     }
 
     private func handleDownloadTap(for entry: MacOSInstallerEntry) {
+        guard supportsMontereyPlaceholderDownload(entry) else {
+            AppLogging.info(
+                "Placeholder pobierania jest obecnie dostepny tylko dla macOS Monterey.",
+                category: "Downloader"
+            )
+            return
+        }
+
+        activeDownloadEntry = entry
+        downloadFlowModel.start(for: entry)
+
         AppLogging.info(
-            "Wybrano opcje pobrania dla \(entry.name) \(entry.version), funkcja pobierania bedzie dodana w Etapie 2.",
+            "Uruchomiono placeholder widoku pobierania dla \(entry.name) \(entry.version).",
             category: "Downloader"
         )
+    }
+
+    private func supportsMontereyPlaceholderDownload(_ entry: MacOSInstallerEntry) -> Bool {
+        let normalizedName = entry.name.lowercased()
+        return normalizedName.contains("monterey") || entry.version.split(separator: ".").first == "12"
     }
 
     private func ensureSelectedEntryIsVisible() {
@@ -523,6 +817,365 @@ struct MacOSDownloaderWindowView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
+    private func sendDownloadCompletionNotificationIfInactive(for entry: MacOSInstallerEntry) {
+        guard !NSApp.isActive else { return }
+
+        let title = String(localized: "Pobieranie zakończone")
+        let body = String(
+            format: String(localized: "Pobieranie systemu %@ %@ zostało zakończone pomyślnie."),
+            entry.name,
+            entry.version
+        )
+
+        NotificationPermissionManager.shared.shouldDeliverInAppNotification { shouldDeliver in
+            guard shouldDeliver else { return }
+            scheduleSystemNotification(title: title, body: body)
+            AppLogging.info(
+                "Wyslano powiadomienie systemowe o zakonczeniu pobierania \(entry.name) \(entry.version).",
+                category: "Downloader"
+            )
+        }
+    }
+
+    private func scheduleSystemNotification(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "macUSB.downloader.\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
+    }
+
+    private func plannedInstallerFolderURL() -> URL {
+        let desktop = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Desktop", isDirectory: true)
+        return desktop.appendingPathComponent("macUSB Downloads", isDirectory: true)
+    }
+
+    private func openPlannedInstallerFolder() {
+        let folderURL = plannedInstallerFolderURL()
+        do {
+            try FileManager.default.createDirectory(
+                at: folderURL,
+                withIntermediateDirectories: true,
+                attributes: nil
+            )
+            NSWorkspace.shared.open(folderURL)
+        } catch {
+            AppLogging.error(
+                "Nie udalo sie otworzyc folderu docelowego pobrania: \(error.localizedDescription)",
+                category: "Downloader"
+            )
+        }
+    }
+
+}
+
+private enum DownloadPlaceholderStageVisualState {
+    case pending
+    case active
+    case completed
+}
+
+private enum MontereyDownloadPlaceholderFlowStage: Int, CaseIterable {
+    case connection
+    case downloading
+    case verifying
+    case buildingInstaller
+    case cleanup
+}
+
+@MainActor
+private final class MontereyDownloadPlaceholderFlowModel: ObservableObject {
+    private struct PlaceholderFile {
+        let name: String
+        let sizeGB: Double
+    }
+
+    @Published private(set) var currentStage: MontereyDownloadPlaceholderFlowStage = .connection
+    @Published private(set) var completedStages: Set<MontereyDownloadPlaceholderFlowStage> = []
+    @Published private(set) var isFinished: Bool = false
+
+    @Published private(set) var connectionStatusText: String = "Weryfikuję połączenie z serwerami Apple..."
+    @Published private(set) var downloadCurrentIndex: Int = 0
+    @Published private(set) var downloadTotal: Int = 0
+    @Published private(set) var downloadFileName: String = "Oczekiwanie na plik..."
+    @Published private(set) var downloadProgress: Double = 0
+    @Published private(set) var downloadSpeedText: String = "0.0 MB/s"
+    @Published private(set) var downloadTransferredText: String = "0.0MB/0.0MB"
+    @Published private(set) var verifyCurrentIndex: Int = 0
+    @Published private(set) var verifyTotal: Int = 0
+    @Published private(set) var verifyFileName: String = "Oczekiwanie na plik..."
+    @Published private(set) var verifyProgress: Double = 0
+    @Published private(set) var buildStatusText: String = "Przygotowywanie środowiska budowania..."
+    @Published private(set) var buildProgress: Double? = nil
+    @Published private(set) var cleanupStatusText: String = "Przygotowanie czyszczenia..."
+    @Published private(set) var cleanupProgress: Double = 0
+    @Published private(set) var summaryTotalDownloadedText: String = "0.0 GB"
+    @Published private(set) var summaryAverageSpeedText: String = "0.0 MB/s"
+    @Published private(set) var summaryDurationText: String = "00m 00s"
+
+    private let placeholderFiles: [PlaceholderFile] = [
+        PlaceholderFile(name: "InstallInfo.plist", sizeGB: 0.001),
+        PlaceholderFile(name: "MajorOSInfo.pkg", sizeGB: 0.001),
+        PlaceholderFile(name: "BuildManifest.plist", sizeGB: 0.002),
+        PlaceholderFile(name: "UpdateBrain.zip", sizeGB: 0.003),
+        PlaceholderFile(name: "Info.plist", sizeGB: 0.001),
+        PlaceholderFile(name: "InstallAssistant.pkg", sizeGB: 12.4)
+    ]
+
+    private var workflowTask: Task<Void, Never>?
+    private var processStartedAt: Date?
+    private var totalDownloadedGB: Double = 0
+    private var speedSamplesMBps: [Double] = []
+    private var didPlayCompletionSound: Bool = false
+
+    func start(for _: MacOSInstallerEntry) {
+        stop()
+        resetState()
+
+        workflowTask = Task { [weak self] in
+            guard let self else { return }
+            await runPlaceholderWorkflow()
+        }
+    }
+
+    func stop() {
+        workflowTask?.cancel()
+        workflowTask = nil
+    }
+
+    func visualState(for stage: MontereyDownloadPlaceholderFlowStage) -> DownloadPlaceholderStageVisualState {
+        if completedStages.contains(stage) {
+            return .completed
+        }
+        if !isFinished && currentStage == stage {
+            return .active
+        }
+        return .pending
+    }
+
+    private func resetState() {
+        currentStage = .connection
+        completedStages = []
+        isFinished = false
+        connectionStatusText = "Weryfikuję połączenie z serwerami Apple..."
+        downloadCurrentIndex = 0
+        downloadTotal = placeholderFiles.count
+        downloadFileName = "Oczekiwanie na plik..."
+        downloadProgress = 0
+        downloadSpeedText = "0.0 MB/s"
+        downloadTransferredText = "0.0MB/0.0MB"
+        verifyCurrentIndex = 0
+        verifyTotal = placeholderFiles.count
+        verifyFileName = "Oczekiwanie na plik..."
+        verifyProgress = 0
+        buildStatusText = "Przygotowywanie środowiska budowania..."
+        buildProgress = nil
+        cleanupStatusText = "Przygotowanie czyszczenia..."
+        cleanupProgress = 0
+        summaryTotalDownloadedText = "0.0 GB"
+        summaryAverageSpeedText = "0.0 MB/s"
+        summaryDurationText = "00m 00s"
+        processStartedAt = Date()
+        totalDownloadedGB = 0
+        speedSamplesMBps = []
+        didPlayCompletionSound = false
+    }
+
+    private func runPlaceholderWorkflow() async {
+        do {
+            try await runConnectionCheck()
+            try await runFileDownloads()
+            try await runFileVerification()
+            try await runInstallerBuild()
+            try await runCleanup()
+
+            updateSummaryMetrics()
+            playCompletionSound(success: true)
+            isFinished = true
+        } catch is CancellationError {
+            // Placeholder flow stopped by window close.
+        } catch {
+            playCompletionSound(success: false)
+            AppLogging.error(
+                "Placeholder pobierania Monterey zakonczyl sie bledem: \(error.localizedDescription)",
+                category: "Downloader"
+            )
+        }
+    }
+
+    private func runConnectionCheck() async throws {
+        currentStage = .connection
+        connectionStatusText = "Weryfikuję połączenie z serwerami Apple..."
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+        try Task.checkCancellation()
+        connectionStatusText = "Połączenie aktywne..."
+        try await Task.sleep(nanoseconds: 1_000_000_000)
+        try Task.checkCancellation()
+        completedStages.insert(.connection)
+    }
+
+    private func runFileDownloads() async throws {
+        currentStage = .downloading
+
+        let totalSize = placeholderFiles.reduce(0.0) { $0 + $1.sizeGB }
+        var downloadedTotal = 0.0
+
+        for (index, file) in placeholderFiles.enumerated() {
+            try Task.checkCancellation()
+
+            downloadCurrentIndex = index + 1
+            downloadFileName = file.name
+
+            let chunkCount = file.sizeGB > 2 ? 5 : 1
+            var downloadedForFile = 0.0
+
+            for chunkIndex in 1...chunkCount {
+                try await Task.sleep(nanoseconds: 2_000_000_000)
+                try Task.checkCancellation()
+
+                let targetForChunk = file.sizeGB * Double(chunkIndex) / Double(chunkCount)
+                let delta = max(0, targetForChunk - downloadedForFile)
+                downloadedForFile = targetForChunk
+                downloadedTotal += delta
+
+                downloadProgress = min(1.0, downloadedTotal / max(totalSize, 0.0001))
+                downloadTransferredText = formatTransferStatus(downloadedGB: downloadedForFile, totalGB: file.sizeGB)
+
+                let speedBase = file.sizeGB > 2 ? 560.0 : 42.0
+                let speed = speedBase + Double((chunkIndex + index) % 4) * 18.5
+                downloadSpeedText = "\(formatDecimal(speed, fractionDigits: 1)) MB/s"
+                speedSamplesMBps.append(speed)
+            }
+        }
+
+        totalDownloadedGB = downloadedTotal
+        downloadProgress = 1.0
+        completedStages.insert(.downloading)
+    }
+
+    private func runFileVerification() async throws {
+        currentStage = .verifying
+        var verified = 0.0
+        let total = Double(placeholderFiles.count)
+
+        for (index, file) in placeholderFiles.enumerated() {
+            try Task.checkCancellation()
+            verifyCurrentIndex = index + 1
+            verifyFileName = file.name
+            try await Task.sleep(nanoseconds: 900_000_000)
+            verified += 1
+            verifyProgress = min(1.0, verified / max(total, 1.0))
+        }
+
+        verifyProgress = 1.0
+        completedStages.insert(.verifying)
+    }
+
+    private func runInstallerBuild() async throws {
+        currentStage = .buildingInstaller
+        buildStatusText = "Użycie pakietu InstallAssistant.pkg..."
+        buildProgress = 0
+
+        for step in 1...8 {
+            try await Task.sleep(nanoseconds: 600_000_000)
+            try Task.checkCancellation()
+            buildProgress = Double(step) / 8.0
+            buildStatusText = "Budowanie aplikacji instalatora..."
+        }
+
+        buildProgress = 1.0
+        completedStages.insert(.buildingInstaller)
+    }
+
+    private func runCleanup() async throws {
+        currentStage = .cleanup
+        cleanupStatusText = "Usuwanie plików tymczasowych sesji..."
+        cleanupProgress = 0
+
+        for step in 1...4 {
+            try await Task.sleep(nanoseconds: 450_000_000)
+            try Task.checkCancellation()
+            cleanupProgress = Double(step) / 4.0
+        }
+
+        cleanupProgress = 1.0
+        completedStages.insert(.cleanup)
+    }
+
+    private func formatTransferStatus(downloadedGB: Double, totalGB: Double) -> String {
+        if totalGB < 1 {
+            let downloadedMB = downloadedGB * 1024
+            let totalMB = totalGB * 1024
+            return "\(formatDecimal(downloadedMB, fractionDigits: 1))MB/\(formatDecimal(totalMB, fractionDigits: 1))MB"
+        }
+        return "\(formatDecimal(downloadedGB, fractionDigits: 1))GB/\(formatDecimal(totalGB, fractionDigits: 1))GB"
+    }
+
+    private func updateSummaryMetrics() {
+        summaryTotalDownloadedText = "\(formatDecimal(totalDownloadedGB, fractionDigits: 1)) GB"
+
+        let averageSpeed = speedSamplesMBps.isEmpty
+            ? 0
+            : speedSamplesMBps.reduce(0, +) / Double(speedSamplesMBps.count)
+        summaryAverageSpeedText = "\(formatDecimal(averageSpeed, fractionDigits: 1)) MB/s"
+
+        let durationSeconds: TimeInterval
+        if let processStartedAt {
+            durationSeconds = max(0, Date().timeIntervalSince(processStartedAt))
+        } else {
+            durationSeconds = 0
+        }
+        summaryDurationText = formatDuration(durationSeconds)
+    }
+
+    private func formatDuration(_ seconds: TimeInterval) -> String {
+        let totalSeconds = Int(seconds.rounded())
+        let minutes = totalSeconds / 60
+        let remainder = totalSeconds % 60
+        return String(format: "%02dm %02ds", minutes, remainder)
+    }
+
+    private func playCompletionSound(success: Bool) {
+        if didPlayCompletionSound { return }
+        didPlayCompletionSound = true
+
+        if !success {
+            if let failSound = NSSound(named: NSSound.Name("Basso")) {
+                failSound.play()
+            }
+            return
+        }
+
+        let bundledSoundURL =
+            Bundle.main.url(forResource: "burn_complete", withExtension: "aif", subdirectory: "Sounds")
+            ?? Bundle.main.url(forResource: "burn_complete", withExtension: "aif")
+
+        if let bundledSoundURL,
+           let successSound = NSSound(contentsOf: bundledSoundURL, byReference: false) {
+            successSound.play()
+        } else if let successSound = NSSound(named: NSSound.Name("burn_success")) {
+            successSound.play()
+        } else if let successSound = NSSound(named: NSSound.Name("Glass")) {
+            successSound.play()
+        } else if let hero = NSSound(named: NSSound.Name("Hero")) {
+            hero.play()
+        }
+    }
+
+    private func formatDecimal(_ value: Double, fractionDigits: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.minimumFractionDigits = fractionDigits
+        formatter.maximumFractionDigits = fractionDigits
+        return formatter.string(from: NSNumber(value: value)) ?? String(format: "%.\(fractionDigits)f", value)
+    }
 }
 
 private struct MacOSDownloaderOptionsSheetView: View {

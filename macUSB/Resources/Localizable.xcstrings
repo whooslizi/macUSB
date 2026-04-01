@@ -4238,6 +4238,9 @@
         }
       }
     },
+    "Etapy pobierania" : {
+
+    },
     "Etapy tworzenia" : {
       "localizations" : {
         "de" : {
@@ -7676,9 +7679,6 @@
 
     },
     "Łączenie z serwerami Apple..." : {
-
-    },
-    "Lista oficjalnych instalatorów macOS i OS X dostępnych na serwerach Apple." : {
 
     },
     "Lista systemów dostępnych do pobrania" : {
@@ -12027,7 +12027,29 @@
         }
       }
     },
+    "Pobieranie i przygotowanie instalatora przebiega etapami. Postęp procesu jest widoczny poniżej." : {
+
+    },
     "Pobieranie katalogu Apple..." : {
+
+    },
+    "Pobieranie systemu" : {
+
+    },
+    "Pobieranie systemu %@ %@ zostało zakończone pomyślnie." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pobieranie systemu %1$@ %2$@ zostało zakończone pomyślnie."
+          }
+        }
+      }
+    },
+    "Pobieranie ukończone" : {
+
+    },
+    "Pobieranie zakończone" : {
 
     },
     "Pobierz" : {
@@ -12184,6 +12206,9 @@
           }
         }
       }
+    },
+    "Pokaż w Finderze" : {
+
     },
     "Pokaż wszystkie dostępne wersje" : {
 
@@ -18683,6 +18708,9 @@
           }
         }
       }
+    },
+    "Wybierz oficjalny instalator macOS lub OS X z serwerów Apple." : {
+
     },
     "Wybierz..." : {
       "localizations" : {
