@@ -2,6 +2,8 @@ import Foundation
 import AppKit
 import ServiceManagement
 import Darwin
+import SwiftUI
+import Combine
 
 final class HelperServiceManager: NSObject {
     static let shared = HelperServiceManager()
@@ -18,18 +20,7 @@ final class HelperServiceManager: NSObject {
     private var statusCheckInProgress = false
     private var statusCheckingPanel: NSPanel?
     private var repairProgressPanel: NSPanel?
-    private var repairStatusField: NSTextField?
-    private var repairStatusDetailField: NSTextField?
-    private var repairStatusCardView: NSVisualEffectView?
-    private var repairStatusIconView: NSImageView?
-    private var repairLogTextView: NSTextView?
-    private var repairSpinner: NSProgressIndicator?
-    private var repairProgressBar: NSProgressIndicator?
-    private var repairCloseButton: NSButton?
-    private var repairDetailsButton: NSButton?
-    private var repairLogContainerView: NSView?
-    private var repairLogHeightConstraint: NSLayoutConstraint?
-    private var repairDetailsExpanded = false
+    private var repairPresentationModel: HelperRepairPanelPresentationModel?
     private var didPresentStartupApprovalPrompt = false
     private let repairLogFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -1232,13 +1223,11 @@ final class HelperServiceManager: NSObject {
 
     private func startRepairPresentation() {
         presentRepairProgressPanelIfNeeded()
-        repairLogTextView?.string = ""
+        repairPresentationModel?.clearLogs()
+        repairPresentationModel?.setDetailsExpanded(false, notify: false)
         setRepairDetailsExpanded(false, animated: false)
-        repairSpinner?.isHidden = false
-        repairSpinner?.startAnimation(nil)
-        repairProgressBar?.isHidden = false
-        repairProgressBar?.startAnimation(nil)
-        repairCloseButton?.isEnabled = false
+        repairPresentationModel?.isRunning = true
+        repairPresentationModel?.closeEnabled = false
         updateRepairStatus(
             text: String(localized: "Przygotowuję naprawę helpera"),
             detail: String(localized: "Odświeżam usługę systemową i weryfikuję gotowość"),
@@ -1272,11 +1261,8 @@ final class HelperServiceManager: NSObject {
             symbolName: success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
         )
         appendRepairProgressLine(message)
-        repairSpinner?.stopAnimation(nil)
-        repairSpinner?.isHidden = true
-        repairProgressBar?.stopAnimation(nil)
-        repairProgressBar?.isHidden = true
-        repairCloseButton?.isEnabled = true
+        repairPresentationModel?.isRunning = false
+        repairPresentationModel?.closeEnabled = true
     }
 
     private func presentRepairProgressPanelIfNeeded() {
@@ -1297,240 +1283,27 @@ final class HelperServiceManager: NSObject {
         panel.isFloatingPanel = true
         panel.level = .floating
         panel.isReleasedWhenClosed = false
+        let model = HelperRepairPanelPresentationModel()
+        model.onClose = { [weak self] in
+            self?.repairProgressPanel?.orderOut(nil)
+        }
+        model.onToggleDetails = { [weak self] expanded in
+            self?.setRepairDetailsExpanded(expanded, animated: true)
+        }
 
-        let contentView = NSVisualEffectView(frame: NSRect(origin: .zero, size: panelSize))
-        contentView.material = .underWindowBackground
-        contentView.blendingMode = .withinWindow
-        contentView.state = .active
-        contentView.translatesAutoresizingMaskIntoConstraints = false
+        let hostingView = NSHostingView(rootView: HelperRepairPanelView(model: model))
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
 
-        let rootView = NSView(frame: NSRect(origin: .zero, size: panelSize))
-        rootView.translatesAutoresizingMaskIntoConstraints = false
-        rootView.addSubview(contentView)
+        let containerView = NSView(frame: NSRect(origin: .zero, size: panelSize))
+        containerView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(hostingView)
         NSLayoutConstraint.activate([
-            contentView.leadingAnchor.constraint(equalTo: rootView.leadingAnchor),
-            contentView.trailingAnchor.constraint(equalTo: rootView.trailingAnchor),
-            contentView.topAnchor.constraint(equalTo: rootView.topAnchor),
-            contentView.bottomAnchor.constraint(equalTo: rootView.bottomAnchor)
+            hostingView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            hostingView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            hostingView.topAnchor.constraint(equalTo: containerView.topAnchor),
+            hostingView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor)
         ])
-        panel.contentView = rootView
-
-        let headerCard = NSVisualEffectView()
-        headerCard.material = .sidebar
-        headerCard.blendingMode = .withinWindow
-        headerCard.state = .active
-        headerCard.translatesAutoresizingMaskIntoConstraints = false
-        headerCard.wantsLayer = true
-        headerCard.layer?.cornerRadius = 14
-        headerCard.layer?.borderWidth = 1
-        headerCard.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.30).cgColor
-        contentView.addSubview(headerCard)
-
-        let headerIconView = NSImageView()
-        headerIconView.image = NSImage(systemSymbolName: "wrench.and.screwdriver.fill", accessibilityDescription: nil)
-        headerIconView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 24, weight: .semibold)
-        headerIconView.contentTintColor = .systemBlue
-        headerIconView.translatesAutoresizingMaskIntoConstraints = false
-        headerCard.addSubview(headerIconView)
-
-        let headerTitleField = NSTextField(labelWithString: String(localized: "Naprawa helpera systemowego"))
-        headerTitleField.font = NSFont.systemFont(ofSize: 18, weight: .bold)
-        headerTitleField.textColor = .labelColor
-        headerTitleField.translatesAutoresizingMaskIntoConstraints = false
-        headerCard.addSubview(headerTitleField)
-
-        let headerSubtitleField = NSTextField(labelWithString: String(localized: "Odświeżam rejestrację helpera i potwierdzam gotowość do pracy"))
-        headerSubtitleField.font = NSFont.systemFont(ofSize: 12, weight: .regular)
-        headerSubtitleField.textColor = .secondaryLabelColor
-        headerSubtitleField.translatesAutoresizingMaskIntoConstraints = false
-        headerCard.addSubview(headerSubtitleField)
-
-        let separatorView = NSView()
-        separatorView.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(separatorView)
-
-        let separatorLabel = NSTextField(labelWithString: String(localized: "Postęp naprawy"))
-        separatorLabel.font = NSFont.systemFont(ofSize: 11, weight: .semibold)
-        separatorLabel.textColor = .secondaryLabelColor
-        separatorLabel.alignment = .center
-        separatorLabel.translatesAutoresizingMaskIntoConstraints = false
-        separatorView.addSubview(separatorLabel)
-
-        let separatorLeft = NSBox()
-        separatorLeft.boxType = .custom
-        separatorLeft.borderType = .lineBorder
-        separatorLeft.borderColor = NSColor.separatorColor.withAlphaComponent(0.5)
-        separatorLeft.contentViewMargins = .zero
-        separatorLeft.translatesAutoresizingMaskIntoConstraints = false
-        separatorView.addSubview(separatorLeft)
-
-        let separatorRight = NSBox()
-        separatorRight.boxType = .custom
-        separatorRight.borderType = .lineBorder
-        separatorRight.borderColor = NSColor.separatorColor.withAlphaComponent(0.5)
-        separatorRight.contentViewMargins = .zero
-        separatorRight.translatesAutoresizingMaskIntoConstraints = false
-        separatorView.addSubview(separatorRight)
-
-        let statusCard = NSVisualEffectView()
-        statusCard.material = .sidebar
-        statusCard.blendingMode = .withinWindow
-        statusCard.state = .active
-        statusCard.translatesAutoresizingMaskIntoConstraints = false
-        statusCard.wantsLayer = true
-        statusCard.layer?.cornerRadius = 14
-        statusCard.layer?.borderWidth = 1
-        statusCard.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.35).cgColor
-        statusCard.layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.18).cgColor
-        contentView.addSubview(statusCard)
-
-        let statusIconView = NSImageView()
-        statusIconView.image = NSImage(systemSymbolName: "arrow.triangle.2.circlepath.circle.fill", accessibilityDescription: nil)
-        statusIconView.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 18, weight: .semibold)
-        statusIconView.contentTintColor = .systemBlue
-        statusIconView.translatesAutoresizingMaskIntoConstraints = false
-        statusCard.addSubview(statusIconView)
-
-        let statusField = NSTextField(labelWithString: String(localized: "Przygotowanie..."))
-        statusField.font = NSFont.systemFont(ofSize: 14, weight: .semibold)
-        statusField.textColor = .labelColor
-        statusField.translatesAutoresizingMaskIntoConstraints = false
-        statusCard.addSubview(statusField)
-
-        let statusDetailField = NSTextField(labelWithString: String(localized: "Postęp naprawy jest aktualizowany na bieżąco"))
-        statusDetailField.font = NSFont.systemFont(ofSize: 12, weight: .regular)
-        statusDetailField.textColor = .secondaryLabelColor
-        statusDetailField.translatesAutoresizingMaskIntoConstraints = false
-        statusCard.addSubview(statusDetailField)
-
-        let statusProgressBar = NSProgressIndicator()
-        statusProgressBar.style = .bar
-        statusProgressBar.controlSize = .small
-        statusProgressBar.isIndeterminate = true
-        statusProgressBar.usesThreadedAnimation = true
-        statusProgressBar.translatesAutoresizingMaskIntoConstraints = false
-        statusCard.addSubview(statusProgressBar)
-
-        let detailsButton = NSButton(title: String(localized: "Pokaż dziennik techniczny"), target: self, action: #selector(toggleRepairDetails(_:)))
-        detailsButton.bezelStyle = .rounded
-        detailsButton.setButtonType(.momentaryPushIn)
-        detailsButton.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(detailsButton)
-
-        let logContainer = NSBox()
-        logContainer.boxType = .custom
-        logContainer.cornerRadius = 12
-        logContainer.borderColor = NSColor.separatorColor.withAlphaComponent(0.4)
-        logContainer.fillColor = NSColor.windowBackgroundColor.withAlphaComponent(0.85)
-        logContainer.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(logContainer)
-
-        let scrollView = NSScrollView()
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
-        scrollView.borderType = .noBorder
-        scrollView.drawsBackground = false
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
-
-        let textView = NSTextView()
-        textView.isEditable = false
-        textView.isSelectable = true
-        textView.drawsBackground = false
-        textView.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
-        textView.textColor = .labelColor
-        textView.textContainerInset = NSSize(width: 8, height: 8)
-        scrollView.documentView = textView
-        logContainer.addSubview(scrollView)
-
-        let closeButton = NSButton(title: String(localized: "Zamknij"), target: self, action: #selector(closeRepairProgressPanel(_:)))
-        closeButton.bezelStyle = .rounded
-        closeButton.isEnabled = false
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
-        contentView.addSubview(closeButton)
-
-        let logHeightConstraint = logContainer.heightAnchor.constraint(equalToConstant: 0)
-        logHeightConstraint.priority = .required
-
-        NSLayoutConstraint.activate([
-            headerCard.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            headerCard.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            headerCard.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 18),
-
-            headerIconView.leadingAnchor.constraint(equalTo: headerCard.leadingAnchor, constant: 14),
-            headerIconView.topAnchor.constraint(equalTo: headerCard.topAnchor, constant: 14),
-            headerIconView.widthAnchor.constraint(equalToConstant: 28),
-            headerIconView.heightAnchor.constraint(equalToConstant: 28),
-
-            headerTitleField.leadingAnchor.constraint(equalTo: headerIconView.trailingAnchor, constant: 10),
-            headerTitleField.topAnchor.constraint(equalTo: headerCard.topAnchor, constant: 12),
-            headerTitleField.trailingAnchor.constraint(equalTo: headerCard.trailingAnchor, constant: -14),
-
-            headerSubtitleField.leadingAnchor.constraint(equalTo: headerTitleField.leadingAnchor),
-            headerSubtitleField.topAnchor.constraint(equalTo: headerTitleField.bottomAnchor, constant: 2),
-            headerSubtitleField.trailingAnchor.constraint(equalTo: headerTitleField.trailingAnchor),
-            headerSubtitleField.bottomAnchor.constraint(equalTo: headerCard.bottomAnchor, constant: -14),
-
-            separatorView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            separatorView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            separatorView.topAnchor.constraint(equalTo: headerCard.bottomAnchor, constant: 12),
-            separatorView.heightAnchor.constraint(equalToConstant: 18),
-
-            separatorLabel.centerXAnchor.constraint(equalTo: separatorView.centerXAnchor),
-            separatorLabel.centerYAnchor.constraint(equalTo: separatorView.centerYAnchor),
-            separatorLabel.widthAnchor.constraint(equalToConstant: 120),
-
-            separatorLeft.leadingAnchor.constraint(equalTo: separatorView.leadingAnchor),
-            separatorLeft.trailingAnchor.constraint(equalTo: separatorLabel.leadingAnchor, constant: -8),
-            separatorLeft.centerYAnchor.constraint(equalTo: separatorView.centerYAnchor),
-            separatorLeft.heightAnchor.constraint(equalToConstant: 1),
-
-            separatorRight.leadingAnchor.constraint(equalTo: separatorLabel.trailingAnchor, constant: 8),
-            separatorRight.trailingAnchor.constraint(equalTo: separatorView.trailingAnchor),
-            separatorRight.centerYAnchor.constraint(equalTo: separatorView.centerYAnchor),
-            separatorRight.heightAnchor.constraint(equalToConstant: 1),
-
-            statusCard.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            statusCard.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            statusCard.topAnchor.constraint(equalTo: separatorView.bottomAnchor, constant: 10),
-
-            statusIconView.leadingAnchor.constraint(equalTo: statusCard.leadingAnchor, constant: 14),
-            statusIconView.topAnchor.constraint(equalTo: statusCard.topAnchor, constant: 14),
-            statusIconView.widthAnchor.constraint(equalToConstant: 18),
-            statusIconView.heightAnchor.constraint(equalToConstant: 18),
-
-            statusField.leadingAnchor.constraint(equalTo: statusIconView.trailingAnchor, constant: 8),
-            statusField.topAnchor.constraint(equalTo: statusCard.topAnchor, constant: 12),
-            statusField.trailingAnchor.constraint(equalTo: statusCard.trailingAnchor, constant: -14),
-
-            statusDetailField.leadingAnchor.constraint(equalTo: statusField.leadingAnchor),
-            statusDetailField.topAnchor.constraint(equalTo: statusField.bottomAnchor, constant: 4),
-            statusDetailField.trailingAnchor.constraint(equalTo: statusField.trailingAnchor),
-
-            statusProgressBar.leadingAnchor.constraint(equalTo: statusCard.leadingAnchor, constant: 14),
-            statusProgressBar.trailingAnchor.constraint(equalTo: statusCard.trailingAnchor, constant: -14),
-            statusProgressBar.topAnchor.constraint(equalTo: statusDetailField.bottomAnchor, constant: 10),
-            statusProgressBar.heightAnchor.constraint(equalToConstant: 8),
-            statusProgressBar.bottomAnchor.constraint(equalTo: statusCard.bottomAnchor, constant: -12),
-
-            detailsButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            detailsButton.topAnchor.constraint(equalTo: statusCard.bottomAnchor, constant: 12),
-
-            logContainer.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 20),
-            logContainer.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            logContainer.topAnchor.constraint(equalTo: detailsButton.bottomAnchor, constant: 10),
-            logHeightConstraint,
-
-            scrollView.leadingAnchor.constraint(equalTo: logContainer.leadingAnchor, constant: 1),
-            scrollView.trailingAnchor.constraint(equalTo: logContainer.trailingAnchor, constant: -1),
-            scrollView.topAnchor.constraint(equalTo: logContainer.topAnchor, constant: 1),
-            scrollView.bottomAnchor.constraint(equalTo: logContainer.bottomAnchor, constant: -1),
-
-            closeButton.topAnchor.constraint(equalTo: logContainer.bottomAnchor, constant: 14),
-            closeButton.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -20),
-            closeButton.widthAnchor.constraint(equalToConstant: 92),
-            closeButton.heightAnchor.constraint(equalToConstant: 30),
-            closeButton.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -18)
-        ])
+        panel.contentView = containerView
 
         if let ownerWindow = NSApp.keyWindow ?? NSApp.mainWindow {
             let ownerFrame = ownerWindow.frame
@@ -1544,70 +1317,26 @@ final class HelperServiceManager: NSObject {
         }
 
         repairProgressPanel = panel
-        repairStatusField = statusField
-        repairStatusDetailField = statusDetailField
-        repairStatusCardView = statusCard
-        repairStatusIconView = statusIconView
-        repairLogTextView = textView
-        repairSpinner = nil
-        repairProgressBar = statusProgressBar
-        repairCloseButton = closeButton
-        repairDetailsButton = detailsButton
-        repairLogContainerView = logContainer
-        repairLogHeightConstraint = logHeightConstraint
-        repairDetailsExpanded = false
-        logContainer.isHidden = true
+        repairPresentationModel = model
 
         panel.orderFrontRegardless()
         NSApp.activate(ignoringOtherApps: true)
     }
 
     private func appendRepairProgressLine(_ line: String) {
-        guard let textView = repairLogTextView else { return }
+        guard let model = repairPresentationModel else { return }
         let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         let timestamp = repairLogFormatter.string(from: Date())
-        let renderedLine = "[\(timestamp)] \(trimmed)\n"
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: NSFont.monospacedSystemFont(ofSize: 12, weight: .regular),
-            .foregroundColor: NSColor.labelColor
-        ]
-        textView.textStorage?.append(NSAttributedString(string: renderedLine, attributes: attributes))
-        textView.scrollToEndOfDocument(nil)
+        model.appendLog("[\(timestamp)] \(trimmed)")
     }
 
     private func updateRepairStatus(text: String, detail: String, result: Bool?, symbolName: String?) {
-        guard let statusField = repairStatusField else { return }
-        guard let detailField = repairStatusDetailField else { return }
-        guard let statusCard = repairStatusCardView else { return }
-        guard let statusIconView = repairStatusIconView else { return }
-        statusField.stringValue = text
-        detailField.stringValue = detail
-
-        switch result {
-        case .some(true):
-            statusField.textColor = .systemGreen
-            detailField.textColor = .secondaryLabelColor
-            statusIconView.image = NSImage(systemSymbolName: "checkmark.circle.fill", accessibilityDescription: nil)
-            statusIconView.contentTintColor = .systemGreen
-            statusCard.layer?.backgroundColor = NSColor.systemGreen.withAlphaComponent(0.15).cgColor
-            statusCard.layer?.borderColor = NSColor.systemGreen.withAlphaComponent(0.35).cgColor
-        case .some(false):
-            statusField.textColor = .systemRed
-            detailField.textColor = .secondaryLabelColor
-            statusIconView.image = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: nil)
-            statusIconView.contentTintColor = .systemRed
-            statusCard.layer?.backgroundColor = NSColor.systemRed.withAlphaComponent(0.13).cgColor
-            statusCard.layer?.borderColor = NSColor.systemRed.withAlphaComponent(0.33).cgColor
-        case .none:
-            statusField.textColor = .labelColor
-            detailField.textColor = .secondaryLabelColor
-            let neutralSymbol = symbolName ?? "arrow.triangle.2.circlepath.circle.fill"
-            statusIconView.image = NSImage(systemSymbolName: neutralSymbol, accessibilityDescription: nil)
-            statusIconView.contentTintColor = .systemBlue
-            statusCard.layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.18).cgColor
-            statusCard.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.35).cgColor
-        }
+        guard let model = repairPresentationModel else { return }
+        model.statusTitle = text
+        model.statusDetail = detail
+        model.statusResult = result
+        model.statusSymbolName = symbolName ?? "arrow.triangle.2.circlepath.circle.fill"
     }
 
     private func userFacingRepairStatus(for message: String) -> String {
@@ -1668,13 +1397,7 @@ final class HelperServiceManager: NSObject {
 
     private func setRepairDetailsExpanded(_ expanded: Bool, animated: Bool) {
         guard let panel = repairProgressPanel else { return }
-        repairDetailsExpanded = expanded
-        repairDetailsButton?.title = expanded
-        ? String(localized: "Ukryj dziennik techniczny")
-        : String(localized: "Pokaż dziennik techniczny")
-
-        repairLogContainerView?.isHidden = false
-        repairLogHeightConstraint?.constant = expanded ? 190 : 0
+        repairPresentationModel?.setDetailsExpanded(expanded, notify: false)
 
         let targetHeight: CGFloat = expanded ? 650 : 450
         var newFrame = panel.frame
@@ -1683,15 +1406,6 @@ final class HelperServiceManager: NSObject {
         newFrame.size.height = targetHeight
 
         panel.setFrame(newFrame, display: true, animate: animated)
-        panel.contentView?.layoutSubtreeIfNeeded()
-
-        if !expanded {
-            repairLogContainerView?.isHidden = true
-        }
-    }
-
-    @objc private func toggleRepairDetails(_ sender: NSButton) {
-        setRepairDetailsExpanded(!repairDetailsExpanded, animated: true)
     }
 
     @objc private func closeRepairProgressPanel(_ sender: NSButton) {
@@ -1751,5 +1465,171 @@ final class HelperServiceManager: NSObject {
         } else {
             alert.runModal()
         }
+    }
+}
+
+@MainActor
+private final class HelperRepairPanelPresentationModel: ObservableObject {
+    @Published var statusTitle: String = String(localized: "Przygotowuję naprawę helpera")
+    @Published var statusDetail: String = String(localized: "Odświeżam usługę systemową i weryfikuję gotowość")
+    @Published var statusResult: Bool? = nil
+    @Published var statusSymbolName: String = "wrench.and.screwdriver.fill"
+    @Published var logLines: [String] = []
+    @Published var isRunning: Bool = true
+    @Published var closeEnabled: Bool = false
+    @Published var isDetailsExpanded: Bool = false
+
+    var onClose: (() -> Void)?
+    var onToggleDetails: ((Bool) -> Void)?
+
+    var joinedLogs: String {
+        logLines.joined(separator: "\n")
+    }
+
+    func appendLog(_ line: String) {
+        logLines.append(line)
+    }
+
+    func clearLogs() {
+        logLines.removeAll(keepingCapacity: true)
+    }
+
+    func requestClose() {
+        onClose?()
+    }
+
+    func toggleDetails() {
+        isDetailsExpanded.toggle()
+        onToggleDetails?(isDetailsExpanded)
+    }
+
+    func setDetailsExpanded(_ expanded: Bool, notify: Bool) {
+        isDetailsExpanded = expanded
+        if notify {
+            onToggleDetails?(expanded)
+        }
+    }
+}
+
+private struct HelperRepairPanelView: View {
+    @ObservedObject var model: HelperRepairPanelPresentationModel
+
+    private var statusTone: MacUSBSurfaceTone {
+        switch model.statusResult {
+        case .some(true): return .success
+        case .some(false): return .error
+        case .none: return .neutral
+        }
+    }
+
+    private var statusIconColor: Color {
+        switch model.statusResult {
+        case .some(true): return .green
+        case .some(false): return .red
+        case .none: return .accentColor
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MacUSBDesignTokens.sectionGroupSpacing) {
+            StatusCard(tone: .subtle, density: .compact) {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "wrench.and.screwdriver.fill")
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(.accentColor)
+                        .frame(width: MacUSBDesignTokens.iconColumnWidth, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(String(localized: "Naprawa helpera systemowego"))
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                        Text(String(localized: "Odświeżam rejestrację helpera i potwierdzam gotowość do pracy"))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            HStack(spacing: 10) {
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.30))
+                    .frame(height: 1)
+                Text(String(localized: "Postęp naprawy"))
+                    .font(.footnote)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+                Rectangle()
+                    .fill(Color.secondary.opacity(0.30))
+                    .frame(height: 1)
+            }
+
+            StatusCard(tone: statusTone) {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: model.statusSymbolName)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(statusIconColor)
+                            .frame(width: MacUSBDesignTokens.iconColumnWidth, alignment: .leading)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(model.statusTitle)
+                                .font(.headline)
+                                .fontWeight(.semibold)
+                            Text(model.statusDetail)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    if model.isRunning {
+                        ProgressView()
+                            .progressViewStyle(.linear)
+                    }
+                }
+            }
+
+            HStack {
+                Spacer(minLength: 0)
+                Button(model.isDetailsExpanded
+                       ? String(localized: "Ukryj dziennik techniczny")
+                       : String(localized: "Pokaż dziennik techniczny")) {
+                    model.toggleDetails()
+                }
+                .macUSBSecondaryButtonStyle()
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+            .padding(.bottom, model.isDetailsExpanded ? 0 : 10)
+
+            if model.isDetailsExpanded {
+                StatusCard(tone: .neutral, density: .compact) {
+                    ScrollView {
+                        Text(model.joinedLogs.isEmpty ? String(localized: "Brak wpisów dziennika") : model.joinedLogs)
+                            .textSelection(.enabled)
+                            .font(.system(size: 12, weight: .regular, design: .monospaced))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(height: 180)
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .padding(.horizontal, MacUSBDesignTokens.contentHorizontalPadding)
+        .padding(.top, MacUSBDesignTokens.contentVerticalPadding)
+        .frame(width: MacUSBDesignTokens.windowWidth, alignment: .top)
+        .safeAreaInset(edge: .bottom) {
+            BottomActionBar {
+                Button {
+                    model.requestClose()
+                } label: {
+                    HStack {
+                        Text(String(localized: "Zamknij"))
+                        Image(systemName: "xmark.circle.fill")
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(8)
+                }
+                .disabled(!model.closeEnabled)
+                .macUSBPrimaryButtonStyle(isEnabled: model.closeEnabled)
+            }
+        }
+        .animation(.easeInOut(duration: 0.20), value: model.isDetailsExpanded)
     }
 }

@@ -2788,6 +2788,9 @@
         }
       }
     },
+    "Brak wpisów dziennika" : {
+
+    },
     "Brak wymaganych zgód" : {
       "localizations" : {
         "de" : {
@@ -12756,9 +12759,6 @@
     "Postęp naprawy" : {
 
     },
-    "Postęp naprawy jest aktualizowany na bieżąco" : {
-
-    },
     "Potwierdzam poprawną rejestrację" : {
 
     },
@@ -14564,6 +14564,7 @@
       }
     },
     "Przygotowanie..." : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
