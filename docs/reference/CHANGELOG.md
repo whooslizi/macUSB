@@ -1,5 +1,15 @@
 # macUSB Release Changelog
 
+## v2.1
+
+This release makes helper repair more dependable, with a cleaner interface and clearer progress feedback.
+
+### IMPROVEMENTS
+- Helper repair is now more reliable and repeatable, especially in cases where macOS temporarily blocks or delays background activation, with more stable recovery after reconnection attempts.
+- The helper repair window has been redesigned to better match the app style, with clearer status messages and a cleaner, easier-to-follow layout.
+
+---
+
 ## v2.0.2
 
 This patch release improves installer workflow reliability by tightening USB target validation rules and strengthening recovery behavior in helper and source-analysis edge cases.
