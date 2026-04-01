@@ -12,6 +12,16 @@
 		A10000012F00000100000001 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000012F00000100000006 /* main.swift */; };
 		A10000012F00000100000002 /* macUSBHelper in CopyFiles */ = {isa = PBXBuildFile; fileRef = A10000012F00000100000005 /* macUSBHelper */; };
 		A10000012F00000100000003 /* macUSB/Resources/LaunchDaemons/com.kruszoneq.macusb.helper.plist in CopyFiles */ = {isa = PBXBuildFile; fileRef = A10000012F00000100000007 /* macUSB/Resources/LaunchDaemons/com.kruszoneq.macusb.helper.plist */; };
+		A10000012F00000100000031 /* IPC/HelperIPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000012F00000100000021 /* IPC/HelperIPC.swift */; };
+		A10000012F00000100000032 /* Service/PrivilegedHelperService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000012F00000100000022 /* Service/PrivilegedHelperService.swift */; };
+		A10000012F00000100000033 /* Service/HelperListenerDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000012F00000100000023 /* Service/HelperListenerDelegate.swift */; };
+		A10000012F00000100000034 /* Workflow/HelperWorkflowExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000012F00000100000024 /* Workflow/HelperWorkflowExecutor.swift */; };
+		A10000012F00000100000035 /* Workflow/HelperWorkflowStages.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000012F00000100000025 /* Workflow/HelperWorkflowStages.swift */; };
+		A10000012F00000100000036 /* Workflow/HelperWorkflowProgressParsing.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000012F00000100000026 /* Workflow/HelperWorkflowProgressParsing.swift */; };
+		A10000012F00000100000037 /* Workflow/HelperWorkflowDiskResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000012F00000100000027 /* Workflow/HelperWorkflowDiskResolution.swift */; };
+		A10000012F00000100000038 /* Workflow/HelperWorkflowFileOperations.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000012F00000100000028 /* Workflow/HelperWorkflowFileOperations.swift */; };
+		A10000012F00000100000039 /* DownloaderAssembly/DownloaderAssemblyExecutor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000012F00000100000029 /* DownloaderAssembly/DownloaderAssemblyExecutor.swift */; };
+		A10000012F0000010000003A /* DownloaderAssembly/DownloaderAssemblyProcess.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000012F0000010000002A /* DownloaderAssembly/DownloaderAssemblyProcess.swift */; };
 		B10000012F00000100000001 /* macUSB/Resources/Sounds/burn_complete.aif in Resources */ = {isa = PBXBuildFile; fileRef = B10000012F00000100000002 /* macUSB/Resources/Sounds/burn_complete.aif */; };
 		C10000012F00000100000001 /* ../macUSB/Shared/Localization/HelperWorkflowLocalizationKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000012F00000100000002 /* ../macUSB/Shared/Localization/HelperWorkflowLocalizationKeys.swift */; };
 /* End PBXBuildFile section */
@@ -76,6 +86,16 @@
 		A10000012F00000100000007 /* macUSB/Resources/LaunchDaemons/com.kruszoneq.macusb.helper.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = macUSB/Resources/LaunchDaemons/com.kruszoneq.macusb.helper.plist; sourceTree = "<group>"; };
 		A10000012F00000100000013 /* macUSBHelper.debug.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = macUSBHelper.debug.entitlements; sourceTree = "<group>"; };
 		A10000012F00000100000014 /* macUSBHelper.release.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = macUSBHelper.release.entitlements; sourceTree = "<group>"; };
+		A10000012F00000100000021 /* IPC/HelperIPC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IPC/HelperIPC.swift; sourceTree = "<group>"; };
+		A10000012F00000100000022 /* Service/PrivilegedHelperService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Service/PrivilegedHelperService.swift; sourceTree = "<group>"; };
+		A10000012F00000100000023 /* Service/HelperListenerDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Service/HelperListenerDelegate.swift; sourceTree = "<group>"; };
+		A10000012F00000100000024 /* Workflow/HelperWorkflowExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workflow/HelperWorkflowExecutor.swift; sourceTree = "<group>"; };
+		A10000012F00000100000025 /* Workflow/HelperWorkflowStages.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workflow/HelperWorkflowStages.swift; sourceTree = "<group>"; };
+		A10000012F00000100000026 /* Workflow/HelperWorkflowProgressParsing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workflow/HelperWorkflowProgressParsing.swift; sourceTree = "<group>"; };
+		A10000012F00000100000027 /* Workflow/HelperWorkflowDiskResolution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workflow/HelperWorkflowDiskResolution.swift; sourceTree = "<group>"; };
+		A10000012F00000100000028 /* Workflow/HelperWorkflowFileOperations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Workflow/HelperWorkflowFileOperations.swift; sourceTree = "<group>"; };
+		A10000012F00000100000029 /* DownloaderAssembly/DownloaderAssemblyExecutor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloaderAssembly/DownloaderAssemblyExecutor.swift; sourceTree = "<group>"; };
+		A10000012F0000010000002A /* DownloaderAssembly/DownloaderAssemblyProcess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DownloaderAssembly/DownloaderAssemblyProcess.swift; sourceTree = "<group>"; };
 		B10000012F00000100000002 /* macUSB/Resources/Sounds/burn_complete.aif */ = {isa = PBXFileReference; lastKnownFileType = audio.aiff; path = macUSB/Resources/Sounds/burn_complete.aif; sourceTree = "<group>"; };
 		C10000012F00000100000002 /* ../macUSB/Shared/Localization/HelperWorkflowLocalizationKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ../macUSB/Shared/Localization/HelperWorkflowLocalizationKeys.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -125,6 +145,13 @@
 				Shared/Models/Models.swift,
 				Shared/Services/FullDiskAccessPermissionManager.swift,
 				Shared/Services/Helper/HelperIPC.swift,
+				Shared/Services/Helper/HelperService/HelperServiceBootstrap.swift,
+				Shared/Services/Helper/HelperService/HelperServiceDiagnostics.swift,
+				Shared/Services/Helper/HelperService/HelperServiceEnsureReadyFlow.swift,
+				Shared/Services/Helper/HelperService/HelperServiceRepairFlow.swift,
+				Shared/Services/Helper/HelperService/HelperServiceRepairPanelView.swift,
+				Shared/Services/Helper/HelperService/HelperServiceRepairUI.swift,
+				Shared/Services/Helper/HelperService/HelperServiceStatusUI.swift,
 				Shared/Services/Helper/HelperServiceManager.swift,
 				Shared/Services/Helper/PrivilegedOperationClient.swift,
 				Shared/Services/LanguageManager.swift,
@@ -166,6 +193,13 @@
 				Shared/Models/Models.swift,
 				Shared/Services/FullDiskAccessPermissionManager.swift,
 				Shared/Services/Helper/HelperIPC.swift,
+				Shared/Services/Helper/HelperService/HelperServiceBootstrap.swift,
+				Shared/Services/Helper/HelperService/HelperServiceDiagnostics.swift,
+				Shared/Services/Helper/HelperService/HelperServiceEnsureReadyFlow.swift,
+				Shared/Services/Helper/HelperService/HelperServiceRepairFlow.swift,
+				Shared/Services/Helper/HelperService/HelperServiceRepairPanelView.swift,
+				Shared/Services/Helper/HelperService/HelperServiceRepairUI.swift,
+				Shared/Services/Helper/HelperService/HelperServiceStatusUI.swift,
 				Shared/Services/Helper/HelperServiceManager.swift,
 				Shared/Services/Helper/PrivilegedOperationClient.swift,
 				Shared/Services/LanguageManager.swift,
@@ -276,6 +310,16 @@
 			isa = PBXGroup;
 			children = (
 				A10000012F00000100000006 /* main.swift */,
+				A10000012F00000100000021 /* IPC/HelperIPC.swift */,
+				A10000012F00000100000022 /* Service/PrivilegedHelperService.swift */,
+				A10000012F00000100000023 /* Service/HelperListenerDelegate.swift */,
+				A10000012F00000100000024 /* Workflow/HelperWorkflowExecutor.swift */,
+				A10000012F00000100000025 /* Workflow/HelperWorkflowStages.swift */,
+				A10000012F00000100000026 /* Workflow/HelperWorkflowProgressParsing.swift */,
+				A10000012F00000100000027 /* Workflow/HelperWorkflowDiskResolution.swift */,
+				A10000012F00000100000028 /* Workflow/HelperWorkflowFileOperations.swift */,
+				A10000012F00000100000029 /* DownloaderAssembly/DownloaderAssemblyExecutor.swift */,
+				A10000012F0000010000002A /* DownloaderAssembly/DownloaderAssemblyProcess.swift */,
 				C10000012F00000100000002 /* ../macUSB/Shared/Localization/HelperWorkflowLocalizationKeys.swift */,
 				A10000012F00000100000013 /* macUSBHelper.debug.entitlements */,
 				A10000012F00000100000014 /* macUSBHelper.release.entitlements */,
@@ -493,6 +537,16 @@
 			files = (
 				C10000012F00000100000001 /* ../macUSB/Shared/Localization/HelperWorkflowLocalizationKeys.swift in Sources */,
 				A10000012F00000100000001 /* main.swift in Sources */,
+				A10000012F00000100000031 /* IPC/HelperIPC.swift in Sources */,
+				A10000012F00000100000032 /* Service/PrivilegedHelperService.swift in Sources */,
+				A10000012F00000100000033 /* Service/HelperListenerDelegate.swift in Sources */,
+				A10000012F00000100000034 /* Workflow/HelperWorkflowExecutor.swift in Sources */,
+				A10000012F00000100000035 /* Workflow/HelperWorkflowStages.swift in Sources */,
+				A10000012F00000100000036 /* Workflow/HelperWorkflowProgressParsing.swift in Sources */,
+				A10000012F00000100000037 /* Workflow/HelperWorkflowDiskResolution.swift in Sources */,
+				A10000012F00000100000038 /* Workflow/HelperWorkflowFileOperations.swift in Sources */,
+				A10000012F00000100000039 /* DownloaderAssembly/DownloaderAssemblyExecutor.swift in Sources */,
+				A10000012F0000010000003A /* DownloaderAssembly/DownloaderAssemblyProcess.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

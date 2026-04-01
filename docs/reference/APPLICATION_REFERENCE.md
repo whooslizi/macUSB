@@ -165,6 +165,9 @@ Update when workflow branching, stage sequence semantics, or flow-specific handl
 
 ### Current Behavior (AS-IS)
 - Helper readiness/registration/repair and XPC health checks are centralized in helper services.
+- Helper layer is structurally split (behavior-preserving refactor 1:1):
+- App-side: `HelperServiceManager.swift` (state/facade) + `Shared/Services/Helper/HelperService/*` (bootstrap, ensure-ready flow, repair flow, status UI, repair UI, diagnostics, repair panel view).
+- Daemon-side: `macUSBHelper/IPC/*`, `macUSBHelper/Service/*`, `macUSBHelper/Workflow/*`, `macUSBHelper/DownloaderAssembly/*`, with `macUSBHelper/main.swift` limited to listener bootstrap.
 - Tools -> `Napraw helpera` always executes a hard reset sequence: `unregister`, short delay, explicit check that old helper no longer responds over XPC, then `register`, short delay, and final XPC health validation.
 - Hard repair uses a base `3s` post-unregister stabilization delay; if helper still appears unchanged after that wait, it applies an additional one-time `5s` delay before continuing teardown validation.
 - Hard repair uses bounded retry/backoff for transient registration and post-register XPC readiness failures (for example short-lived service invalidation races), while still failing explicitly when helper does not converge to a healthy state.
@@ -259,7 +262,29 @@ Core runtime areas:
 - `macUSB/Features/Downloader/*` — downloader module split into `UI/*` (window shell + list/process/summary views), `Logic/*` (discovery + production Monterey download/verify/assembly/cleanup), and `MacOSDownloaderCoordinator.swift` (window lifecycle/orchestration entry).
 - `macUSB/Features/Installation/*` — summary/start/progress orchestration.
 - `macUSB/Features/Finish/*` — result behavior and fallback cleanup UX.
-- `macUSB/Shared/Services/Helper/*` and `macUSBHelper/main.swift` — helper integration and privileged execution.
+- `macUSB/Shared/Services/Helper/*` — app-side helper integration:
+- `HelperIPC.swift`
+- `PrivilegedOperationClient.swift`
+- `HelperServiceManager.swift`
+- `HelperService/HelperServiceBootstrap.swift`
+- `HelperService/HelperServiceEnsureReadyFlow.swift`
+- `HelperService/HelperServiceRepairFlow.swift`
+- `HelperService/HelperServiceStatusUI.swift`
+- `HelperService/HelperServiceRepairUI.swift`
+- `HelperService/HelperServiceRepairPanelView.swift`
+- `HelperService/HelperServiceDiagnostics.swift`
+- `macUSBHelper/*` — privileged daemon runtime:
+- `main.swift` (listener bootstrap only)
+- `IPC/HelperIPC.swift`
+- `Service/PrivilegedHelperService.swift`
+- `Service/HelperListenerDelegate.swift`
+- `Workflow/HelperWorkflowExecutor.swift`
+- `Workflow/HelperWorkflowStages.swift`
+- `Workflow/HelperWorkflowProgressParsing.swift`
+- `Workflow/HelperWorkflowDiskResolution.swift`
+- `Workflow/HelperWorkflowFileOperations.swift`
+- `DownloaderAssembly/DownloaderAssemblyExecutor.swift`
+- `DownloaderAssembly/DownloaderAssemblyProcess.swift`
 - `macUSB/Resources/Localizable.xcstrings` — localization catalog.
 
 Downloader includes production runtime behavior for Monterey download flow; USB creation and analysis contracts remain untouched.
