@@ -249,10 +249,13 @@ Core docs:
 
 Core runtime areas:
 - `macUSB/Features/Analysis/*` — source analysis and USB selection behavior.
+- `macUSB/Features/Downloader/*` — downloader module split into `UI/*` (window shell + list/process/summary views), `Logic/*` (discovery + staged placeholder flow parts), and `MacOSDownloaderCoordinator.swift` (window lifecycle/orchestration entry).
 - `macUSB/Features/Installation/*` — summary/start/progress orchestration.
 - `macUSB/Features/Finish/*` — result behavior and fallback cleanup UX.
 - `macUSB/Shared/Services/Helper/*` and `macUSBHelper/main.swift` — helper integration and privileged execution.
 - `macUSB/Resources/Localizable.xcstrings` — localization catalog.
+
+Downloader file split is a structural refactor only and does not change runtime behavior by itself.
 
 File relationships and responsibilities should remain consistent with runtime contracts above.
 

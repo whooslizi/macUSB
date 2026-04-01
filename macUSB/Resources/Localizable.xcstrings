@@ -1993,7 +1993,13 @@
         }
       }
     },
+    "Anulować pobieranie systemu?" : {
+
+    },
     "Anuluj" : {
+
+    },
+    "Anuluj pobieranie i zamknij" : {
 
     },
     "Automatycznie" : {
@@ -7371,6 +7377,9 @@
         }
       }
     },
+    "Jeśli zamkniesz okno teraz, pobieranie zostanie przerwane, a pobrane pliki tymczasowe zostaną usunięte" : {
+
+    },
     "Język" : {
       "localizations" : {
         "de" : {
@@ -7598,6 +7607,9 @@
           }
         }
       }
+    },
+    "Kontynuuj pobieranie" : {
+
     },
     "Korzystasz z najnowszej dostępnej wersji aplikacji" : {
       "localizations" : {
@@ -12026,9 +12038,6 @@
           }
         }
       }
-    },
-    "Pobieranie i przygotowanie instalatora przebiega etapami. Postęp procesu jest widoczny poniżej." : {
-
     },
     "Pobieranie katalogu Apple..." : {
 
@@ -18708,9 +18717,6 @@
           }
         }
       }
-    },
-    "Wybierz oficjalny instalator macOS lub OS X z serwerów Apple." : {
-
     },
     "Wybierz..." : {
       "localizations" : {
