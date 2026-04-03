@@ -124,20 +124,8 @@ extension MacOSDownloaderWindowShellView {
         if let finalInstallerAppURL = downloadFlowModel.finalInstallerAppURL {
             folderURL = finalInstallerAppURL.deletingLastPathComponent()
         } else {
-            folderURL = downloadFlowModel.plannedInstallerFolderURL()
+            folderURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
         }
-        do {
-            try FileManager.default.createDirectory(
-                at: folderURL,
-                withIntermediateDirectories: true,
-                attributes: nil
-            )
-            NSWorkspace.shared.open(folderURL)
-        } catch {
-            AppLogging.error(
-                "Nie udalo sie otworzyc folderu docelowego pobrania: \(error.localizedDescription)",
-                category: "Downloader"
-            )
-        }
+        NSWorkspace.shared.open(folderURL)
     }
 }

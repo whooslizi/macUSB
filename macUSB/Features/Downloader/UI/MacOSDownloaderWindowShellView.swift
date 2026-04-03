@@ -149,15 +149,25 @@ struct MacOSDownloaderWindowShellView: View {
         }
     }
 
-    func supportsMontereyDownload(_ entry: MacOSInstallerEntry) -> Bool {
+    func supportsProductionDownload(_ entry: MacOSInstallerEntry) -> Bool {
         let normalizedName = entry.name.lowercased()
-        return normalizedName.contains("monterey") || entry.version.split(separator: ".").first == "12"
+        let major = entry.version.split(separator: ".").first.map(String.init) ?? ""
+        let supportedMajors: Set<String> = ["11", "12", "13", "14", "15", "26"]
+        if supportedMajors.contains(major) {
+            return true
+        }
+        return normalizedName.contains("big sur")
+            || normalizedName.contains("monterey")
+            || normalizedName.contains("ventura")
+            || normalizedName.contains("sonoma")
+            || normalizedName.contains("sequoia")
+            || normalizedName.contains("tahoe")
     }
 
     func handleDownloadTap(for entry: MacOSInstallerEntry) {
-        guard supportsMontereyDownload(entry) else {
+        guard supportsProductionDownload(entry) else {
             AppLogging.info(
-                "Pobieranie jest obecnie dostepne tylko dla macOS Monterey.",
+                "Pobieranie jest obecnie dostepne tylko dla: macOS Big Sur, Monterey, Ventura, Sonoma, Sequoia i Tahoe.",
                 category: "Downloader"
             )
             return
@@ -167,7 +177,7 @@ struct MacOSDownloaderWindowShellView: View {
         downloadFlowModel.start(for: entry, using: logic)
 
         AppLogging.info(
-            "Uruchomiono pobieranie Monterey dla \(entry.name) \(entry.version).",
+            "Uruchomiono pobieranie systemu dla \(entry.name) \(entry.version).",
             category: "Downloader"
         )
     }

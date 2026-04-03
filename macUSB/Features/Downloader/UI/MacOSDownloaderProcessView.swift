@@ -180,8 +180,6 @@ extension MacOSDownloaderWindowShellView {
             return "checklist"
         case .buildingInstaller:
             return "shippingbox.fill"
-        case .copyingInstaller:
-            return "folder.badge.plus"
         case .cleanup:
             return "trash.fill"
         }
@@ -197,8 +195,6 @@ extension MacOSDownloaderWindowShellView {
             return "Weryfikowanie plików - \(downloadFlowModel.verifyCurrentIndex)/\(downloadFlowModel.verifyTotal)"
         case .buildingInstaller:
             return "Użycie pakietu .pkg do zbudowania instalatora .app"
-        case .copyingInstaller:
-            return "Przenoszenie instalatora do folderu docelowego"
         case .cleanup:
             return "Czyszczenie plików tymczasowych"
         }
@@ -214,8 +210,6 @@ extension MacOSDownloaderWindowShellView {
             return downloadFlowModel.verifyFileName
         case .buildingInstaller:
             return downloadFlowModel.buildStatusText
-        case .copyingInstaller:
-            return downloadFlowModel.copyStatusText
         case .cleanup:
             return downloadFlowModel.cleanupStatusText
         }
@@ -231,8 +225,6 @@ extension MacOSDownloaderWindowShellView {
             return downloadFlowModel.verifyProgress
         case .buildingInstaller:
             return downloadFlowModel.buildProgress
-        case .copyingInstaller:
-            return downloadFlowModel.copyProgress
         case .cleanup:
             return downloadFlowModel.cleanupProgress
         }

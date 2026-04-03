@@ -12,7 +12,6 @@ enum MontereyDownloadFlowStage: Int, CaseIterable {
     case downloading
     case verifying
     case buildingInstaller
-    case copyingInstaller
     case cleanup
 }
 
@@ -107,8 +106,6 @@ final class MontereyDownloadFlowModel: ObservableObject {
     @Published var verifyProgress: Double = 0
     @Published var buildStatusText: String = "Przygotowywanie środowiska budowania..."
     @Published var buildProgress: Double? = nil
-    @Published var copyStatusText: String = "Przygotowanie kopiowania instalatora..."
-    @Published var copyProgress: Double = 0
     @Published var cleanupStatusText: String = "Przygotowanie czyszczenia..."
     @Published var cleanupProgress: Double = 0
     @Published var summaryTotalDownloadedText: String = "0.0 GB"
@@ -201,8 +198,6 @@ final class MontereyDownloadFlowModel: ObservableObject {
         verifyProgress = 0
         buildStatusText = "Przygotowywanie środowiska budowania..."
         buildProgress = nil
-        copyStatusText = "Przygotowanie kopiowania instalatora..."
-        copyProgress = 0
         cleanupStatusText = "Przygotowanie czyszczenia..."
         cleanupProgress = 0
         summaryTotalDownloadedText = "0.0 GB"
@@ -275,7 +270,7 @@ final class MontereyDownloadFlowModel: ObservableObject {
             }()
 
             AppLogging.error(
-                "Pobieranie Monterey zakonczone bledem: \(technicalMessage)",
+                "Pobieranie systemu zakonczone bledem: \(technicalMessage)",
                 category: "Downloader"
             )
 
@@ -326,7 +321,7 @@ final class MontereyDownloadFlowModel: ObservableObject {
         using logic: MacOSDownloaderLogic
     ) async throws -> DownloadManifest {
         currentStage = .connection
-        connectionStatusText = "Łączę się z serwerami Apple i pobieram manifest Monterey..."
+        connectionStatusText = "Łączę się z serwerami Apple i pobieram manifest wybranego systemu..."
 
         let manifest = try await logic.prepareDownloadManifest(for: entry) { [weak self] status in
             Task { @MainActor [weak self] in
@@ -347,7 +342,7 @@ final class MontereyDownloadFlowModel: ObservableObject {
                 digestPreview = "brak"
             }
             AppLogging.info(
-                "Manifest Monterey item: name=\(item.name), size=\(item.expectedSizeBytes), digest=\(digestPreview), url=\(item.url.absoluteString)",
+                "Manifest systemu item: name=\(item.name), size=\(item.expectedSizeBytes), digest=\(digestPreview), url=\(item.url.absoluteString)",
                 category: "Downloader"
             )
         }

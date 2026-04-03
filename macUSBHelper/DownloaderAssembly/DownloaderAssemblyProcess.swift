@@ -1,26 +1,6 @@
 import Foundation
 
 extension DownloaderAssemblyExecutor {
-    func moveInstallerToFinalDestination(from builtAppURL: URL) throws -> URL {
-        let destinationFolderURL = URL(
-            fileURLWithPath: request.finalDestinationDirectoryPath,
-            isDirectory: true
-        )
-        try FileManager.default.createDirectory(at: destinationFolderURL, withIntermediateDirectories: true)
-
-        let finalURL = uniqueAppDestinationURL(
-            preferredName: request.expectedAppName,
-            in: destinationFolderURL
-        )
-
-        try runCommand(
-            executable: "/usr/bin/ditto",
-            arguments: [builtAppURL.path, finalURL.path]
-        )
-
-        return finalURL
-    }
-
     func cleanupSessionDirectory(_ sessionRootDirectory: URL) throws {
         guard FileManager.default.fileExists(atPath: sessionRootDirectory.path) else { return }
         try FileManager.default.removeItem(at: sessionRootDirectory)
@@ -31,26 +11,6 @@ extension DownloaderAssemblyExecutor {
                 code: 500,
                 userInfo: [NSLocalizedDescriptionKey: "Katalog sesji nadal istnieje po cleanup: \(sessionRootDirectory.path)"]
             )
-        }
-    }
-
-    func uniqueAppDestinationURL(preferredName: String, in directory: URL) -> URL {
-        let baseName = (preferredName as NSString).deletingPathExtension
-        let ext = (preferredName as NSString).pathExtension
-
-        var candidate = directory.appendingPathComponent(preferredName, isDirectory: true)
-        if !FileManager.default.fileExists(atPath: candidate.path) {
-            return candidate
-        }
-
-        var suffix = 2
-        while true {
-            let nextName = "\(baseName) (\(suffix)).\(ext)"
-            candidate = directory.appendingPathComponent(nextName, isDirectory: true)
-            if !FileManager.default.fileExists(atPath: candidate.path) {
-                return candidate
-            }
-            suffix += 1
         }
     }
 

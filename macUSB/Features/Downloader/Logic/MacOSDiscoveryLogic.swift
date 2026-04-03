@@ -341,15 +341,18 @@ private struct MacOSCatalogService {
         try Task.checkCancellation()
 
         let majorVersion = entry.version.split(separator: ".").first.map(String.init) ?? ""
-        let isMonterey = majorVersion == "12" || entry.name.lowercased().contains("monterey")
-        guard isMonterey else {
+        let normalizedName = entry.name.lowercased()
+        let supportedMajors: Set<String> = ["11", "12", "13", "14", "15", "26"]
+        let supportedNameTokens = ["big sur", "monterey", "ventura", "sonoma", "sequoia", "tahoe"]
+        let hasSupportedName = supportedNameTokens.contains { normalizedName.contains($0) }
+        guard supportedMajors.contains(majorVersion) || hasSupportedName else {
             throw DiscoveryError.unsupportedEntry
         }
         guard let productID = entry.catalogProductID, !productID.isEmpty else {
             throw DiscoveryError.unsupportedEntry
         }
 
-        phase(String(localized: "Pobieranie manifestu Monterey..."))
+        phase(String(localized: "Pobieranie manifestu wybranego systemu..."))
         let catalogData = try await fetchData(from: Constants.catalogURL)
         let products = try parseCatalogProducts(from: catalogData)
         guard let product = products[productID] else {

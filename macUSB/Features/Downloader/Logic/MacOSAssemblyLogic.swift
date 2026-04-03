@@ -9,8 +9,6 @@ extension MontereyDownloadFlowModel {
         currentStage = .buildingInstaller
         buildStatusText = "Przygotowuję budowanie instalatora..."
         buildProgress = 0
-        copyStatusText = "Oczekiwanie na gotowy instalator..."
-        copyProgress = 0
 
         guard let packageURL = locateInstallAssistantPackage(in: manifest) else {
             throw DownloadFailureReason.assemblyFailed("Nie znaleziono pobranego InstallAssistant.pkg")
@@ -22,8 +20,8 @@ extension MontereyDownloadFlowModel {
         let request = DownloaderAssemblyRequestPayload(
             packagePath: packageURL.path,
             outputDirectoryPath: outputDirectory.path,
-            expectedAppName: "Install macOS Monterey.app",
-            finalDestinationDirectoryPath: plannedInstallerFolderURL().path,
+            expectedAppName: expectedInstallerAppName(for: entry),
+            finalDestinationDirectoryPath: "",
             cleanupSessionFiles: false,
             requesterUID: getuid()
         )
@@ -53,36 +51,35 @@ extension MontereyDownloadFlowModel {
             throw DownloadFailureReason.assemblyFailed("Helper nie zwrocil sciezki do instalatora .app")
         }
 
-        buildStatusText = "Instalator .app został zbudowany..."
-        buildProgress = 1.0
-        completedStages.insert(.buildingInstaller)
-
-        currentStage = .copyingInstaller
-        copyStatusText = "Przenoszę gotowy instalator do lokalizacji docelowej..."
-        copyProgress = 0.55
-
         let finalAppURL = URL(fileURLWithPath: outputAppPath)
         guard FileManager.default.fileExists(atPath: finalAppURL.path) else {
             throw DownloadFailureReason.assemblyFailed("Zbudowana aplikacja instalatora nie istnieje")
         }
 
         finalInstallerAppURL = finalAppURL
-        copyStatusText = "Weryfikuję gotowy instalator..."
-        copyProgress = 0.85
-        try validateFinalInstallerApp(
-            at: finalAppURL,
-            packageURL: packageURL,
-            expectedVersion: entry.version,
-            expectedBuild: entry.build
+        try verifyInstallerBuildIfAvailable(
+            of: finalAppURL,
+            expectedBuild: entry.build,
+            expectedVersion: entry.version
         )
-        copyStatusText = "Instalator zapisano w \(finalAppURL.path)"
-        copyProgress = 1.0
-        completedStages.insert(.copyingInstaller)
+        buildStatusText = "Instalator .app został zbudowany w /Applications..."
+        buildProgress = 1.0
+        completedStages.insert(.buildingInstaller)
 
         AppLogging.info(
-            "Monterey installer move status=success destination=\(finalAppURL.path)",
+            "Assembly success destination=\(finalAppURL.path)",
             category: "Downloader"
         )
+    }
+
+    private func expectedInstallerAppName(for entry: MacOSInstallerEntry) -> String {
+        let normalized = entry.name.replacingOccurrences(
+            of: #"^(Install\s+)?"#,
+            with: "",
+            options: [.regularExpression, .caseInsensitive]
+        )
+        let baseName = normalized.isEmpty ? "macOS \(entry.version)" : normalized
+        return "Install \(baseName).app"
     }
 
     private func locateInstallAssistantPackage(in manifest: DownloadManifest) -> URL? {
@@ -116,24 +113,12 @@ extension MontereyDownloadFlowModel {
                 onEvent: { [weak self] event in
                     Task { @MainActor [weak self] in
                         guard let self else { return }
-                        if self.isCopyStageStatus(event.statusText) {
-                            self.completedStages.insert(.buildingInstaller)
-                            self.currentStage = .copyingInstaller
-                            self.copyStatusText = event.statusText
-                            let normalizedCopyProgress = min(
-                                1.0,
-                                max(0, (event.percent - 0.90) / 0.10)
-                            )
-                            self.copyProgress = max(self.copyProgress, normalizedCopyProgress)
-                        } else {
-                            self.currentStage = .buildingInstaller
-                            let normalizedBuildProgress = min(
-                                1.0,
-                                max(0, event.percent / 0.90)
-                            )
-                            self.buildProgress = max(self.buildProgress ?? 0, normalizedBuildProgress)
-                            self.buildStatusText = event.statusText
-                        }
+                        self.currentStage = .buildingInstaller
+                        self.buildProgress = max(
+                            self.buildProgress ?? 0,
+                            min(max(event.percent, 0), 1)
+                        )
+                        self.buildStatusText = event.statusText
                         if let logLine = event.logLine, !logLine.isEmpty {
                             AppLogging.info(logLine, category: "Downloader")
                         }
@@ -155,111 +140,6 @@ extension MontereyDownloadFlowModel {
                 }
             )
         }
-    }
-
-    private func isCopyStageStatus(_ status: String) -> Bool {
-        let normalized = status.lowercased()
-        return normalized.contains("przenoszenie instalatora")
-            || normalized.contains("katalogu docelowego")
-    }
-
-    func plannedInstallerFolderURL() -> URL {
-        URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-            .appendingPathComponent("Poza iCloud", isDirectory: true)
-    }
-
-    private func validateFinalInstallerApp(
-        at appURL: URL,
-        packageURL: URL,
-        expectedVersion: String,
-        expectedBuild: String
-    ) throws {
-        verifyCodeSignatureNonBlocking(of: appURL, packageURL: packageURL)
-        try verifyInstallerBuildIfAvailable(
-            of: appURL,
-            expectedBuild: expectedBuild,
-            expectedVersion: expectedVersion
-        )
-    }
-
-    private func verifyCodeSignatureNonBlocking(of appURL: URL, packageURL: URL) {
-        let expectedCodesign = "exit=0"
-        let codesign = runAndCapture(
-            executable: "/usr/bin/codesign",
-            arguments: ["--verify", "--deep", "--verbose=2", appURL.path]
-        )
-
-        if codesign.status == 0 {
-            AppLogging.info(
-                "Weryfikacja podpisu .app (codesign): expected=\(expectedCodesign), actual=exit=\(codesign.status) dla \(appURL.lastPathComponent).",
-                category: "Downloader"
-            )
-        } else {
-            let details = codesign.output.isEmpty ? "brak szczegolow" : codesign.output
-            AppLogging.error(
-                "Weryfikacja podpisu .app (codesign) niezgodna: expected=\(expectedCodesign), actual=exit=\(codesign.status), details=\(details). Kontynuuje bez blokowania przeplywu.",
-                category: "Downloader"
-            )
-            if isLegacyResourceEnvelopeWarning(details) {
-                verifyPackageSignatureWithPkgutilNonBlocking(packageURL: packageURL)
-            }
-        }
-    }
-
-    private func isLegacyResourceEnvelopeWarning(_ text: String) -> Bool {
-        let normalized = text.lowercased()
-        return normalized.contains("resource envelope is obsolete")
-            || normalized.contains("custom omit rules")
-    }
-
-    private func verifyPackageSignatureWithPkgutilNonBlocking(packageURL: URL) {
-        guard FileManager.default.fileExists(atPath: packageURL.path) else {
-            AppLogging.info(
-                "Legacy warning z codesign: pomijam pkgutil, bo pakiet nie jest juz dostepny pod \(packageURL.path).",
-                category: "Downloader"
-            )
-            return
-        }
-
-        let expectedPkgutil = "signature valid (exit=0)"
-        let pkgutil = runAndCapture(
-            executable: "/usr/sbin/pkgutil",
-            arguments: ["--check-signature", packageURL.path]
-        )
-
-        if pkgutil.status == 0 {
-            let details = pkgutil.output.isEmpty ? "brak szczegolow" : pkgutil.output
-            AppLogging.info(
-                "Fallback podpisu pakietu (pkgutil): expected=\(expectedPkgutil), actual=signature valid (exit=\(pkgutil.status)), details=\(details)",
-                category: "Downloader"
-            )
-        } else {
-            let details = pkgutil.output.isEmpty ? "brak szczegolow" : pkgutil.output
-            AppLogging.error(
-                "Fallback podpisu pakietu (pkgutil) niezgodny: expected=\(expectedPkgutil), actual=invalid/warning (exit=\(pkgutil.status)), details=\(details). Kontynuuje bez blokowania przeplywu.",
-                category: "Downloader"
-            )
-        }
-    }
-
-    private func runAndCapture(executable: String, arguments: [String]) -> (status: Int32, output: String) {
-        let task = Process()
-        task.executableURL = URL(fileURLWithPath: executable)
-        task.arguments = arguments
-        let outputPipe = Pipe()
-        task.standardOutput = outputPipe
-        task.standardError = outputPipe
-
-        do {
-            try task.run()
-            task.waitUntilExit()
-        } catch {
-            return (-1, error.localizedDescription)
-        }
-
-        let output = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return (task.terminationStatus, output)
     }
 
     private func verifyInstallerBuildIfAvailable(

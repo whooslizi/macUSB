@@ -35,8 +35,8 @@ final class DownloaderAssemblyExecutor {
     }
 
     func run() -> DownloaderAssemblyResultPayload {
-        let outputDirectory = URL(fileURLWithPath: request.outputDirectoryPath, isDirectory: true)
-        let sessionRootDirectory = outputDirectory.deletingLastPathComponent()
+        let outputDirectoryPath = URL(fileURLWithPath: request.outputDirectoryPath, isDirectory: true)
+        let sessionRootDirectory = outputDirectoryPath.deletingLastPathComponent()
         let cleanupRequested = request.cleanupSessionFiles
 
         var flowSuccess = false
@@ -56,47 +56,18 @@ final class DownloaderAssemblyExecutor {
                 )
             }
 
-            try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: outputDirectoryPath, withIntermediateDirectories: true)
 
             emit(percent: 0.10, status: "Instalacja pakietu InstallAssistant.pkg")
             let assembledAppURL = try runInstallerAndLocateApp(packageURL: packageURL)
 
             try throwIfCancelled()
-
-            let destinationURL = outputDirectory.appendingPathComponent(request.expectedAppName, isDirectory: true)
-            if FileManager.default.fileExists(atPath: destinationURL.path) {
-                try FileManager.default.removeItem(at: destinationURL)
-            }
-
+            let finalDestinationURL = assembledAppURL
             emit(
-                percent: 0.88,
-                status: "Kopiowanie instalatora .app do katalogu sesji",
-                logLine: "assembly copy-to-session start source=\(assembledAppURL.path) destination=\(destinationURL.path)"
+                percent: 0.95,
+                status: "Instalator .app jest gotowy w /Applications",
+                logLine: "assembly output-ready path=\(finalDestinationURL.path)"
             )
-            try runCommand(
-                executable: "/usr/bin/ditto",
-                arguments: [assembledAppURL.path, destinationURL.path]
-            )
-            emit(
-                percent: 0.91,
-                status: "Kopiowanie instalatora .app do katalogu sesji",
-                logLine: "assembly copy-to-session success destination=\(destinationURL.path)"
-            )
-
-            emit(
-                percent: 0.94,
-                status: "Przenoszenie instalatora do katalogu docelowego",
-                logLine: "assembly move-to-final start source=\(destinationURL.path) destination_dir=\(request.finalDestinationDirectoryPath)"
-            )
-            let finalDestinationURL = try moveInstallerToFinalDestination(from: destinationURL)
-            emit(
-                percent: 0.97,
-                status: "Przenoszenie instalatora do katalogu docelowego",
-                logLine: "assembly move-to-final success destination=\(finalDestinationURL.path)"
-            )
-
-            emit(percent: 0.975, status: "Finalizacja uprawnien instalatora")
-            try normalizeOwnership(path: finalDestinationURL.path, requesterUID: request.requesterUID)
 
             if request.cleanupSessionFiles {
                 emit(percent: 0.98, status: "Czyszczenie plików tymczasowych sesji")
@@ -137,29 +108,4 @@ final class DownloaderAssemblyExecutor {
         )
     }
 
-    private func normalizeOwnership(path: String, requesterUID: UInt32) throws {
-        guard requesterUID > 0 else { return }
-        do {
-            try runCommand(
-                executable: "/usr/sbin/chown",
-                arguments: ["-R", "\(requesterUID)", path]
-            )
-            emit(
-                percent: nil,
-                status: "Finalizacja uprawnien instalatora",
-                logLine: "assembly ownership normalize success uid=\(requesterUID) path=\(path)"
-            )
-        } catch {
-            emit(
-                percent: nil,
-                status: "Finalizacja uprawnien instalatora",
-                logLine: "assembly ownership normalize failed uid=\(requesterUID) path=\(path) error=\(error.localizedDescription)"
-            )
-            throw NSError(
-                domain: "macUSBHelper",
-                code: 550,
-                userInfo: [NSLocalizedDescriptionKey: "Nie udalo sie ustawic wlasciciela instalatora na domyslnego uzytkownika: \(error.localizedDescription)"]
-            )
-        }
-    }
 }

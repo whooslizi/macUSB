@@ -13,7 +13,7 @@ Scope note:
 3. [Architecture Overview](#3-architecture-overview)
 4. [Data Model and State](#4-data-model-and-state)
 5. [Discovery Flow (Apple Catalog)](#5-discovery-flow-apple-catalog)
-6. [Monterey Production Download Flow](#6-monterey-production-download-flow)
+6. [Production Download Flow (Big Sur to Tahoe)](#6-production-download-flow-big-sur-to-tahoe)
 7. [Verification Strategy](#7-verification-strategy)
 8. [Helper Integration](#8-helper-integration)
 9. [UI Contract](#9-ui-contract)
@@ -22,7 +22,7 @@ Scope note:
 12. [Logging and Diagnostics](#12-logging-and-diagnostics)
 13. [File Structure](#13-file-structure)
 14. [Cross-Feature Safety Checklist](#14-cross-feature-safety-checklist)
-15. [How to Extend Beyond Monterey](#15-how-to-extend-beyond-monterey)
+15. [How to Extend Beyond Current Scope](#15-how-to-extend-beyond-current-scope)
 
 ---
 
@@ -35,7 +35,7 @@ Downloader provides:
 - deterministic temp cleanup and end-state summary.
 
 Current production scope:
-- full download pipeline is enabled for selected Monterey entries,
+- full download pipeline is enabled for selected Big Sur, Monterey, Ventura, Sonoma, Sequoia, and Tahoe entries,
 - discovery includes broad Apple-official stable entries across families.
 
 ---
@@ -66,7 +66,7 @@ Downloader split:
 Runtime orchestration:
 - `MacOSDownloaderWindowShellView` owns:
   - `MacOSDownloaderLogic` for discovery,
-  - `MontereyDownloadFlowModel` for staged download pipeline.
+  - `MontereyDownloadFlowModel` for staged download pipeline (Big Sur through Tahoe scope).
 
 ---
 
@@ -112,11 +112,11 @@ Discovery UX contract:
 
 ---
 
-## 6. Monterey Production Download Flow
+## 6. Production Download Flow (Big Sur to Tahoe)
 
-Monterey pipeline (`MontereyDownloadFlowModel`):
+Production pipeline (`MontereyDownloadFlowModel`) for Big Sur, Monterey, Ventura, Sonoma, Sequoia, and Tahoe:
 1. Connection / preflight
-  - fetch real manifest for selected Monterey entry,
+  - fetch real manifest for selected supported entry,
   - validate temporary disk capacity against total expected bytes + reserve.
 2. Sequential file download
   - one file at a time,
@@ -289,7 +289,7 @@ After changing downloader:
 
 ---
 
-## 15. How to Extend Beyond Monterey
+## 15. How to Extend Beyond Current Scope
 
 Extension strategy for additional families:
 1. Keep common pipeline structure:

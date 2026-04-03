@@ -149,7 +149,7 @@ extension MacOSDownloaderWindowShellView {
 
     func installerEntryRow(_ entry: MacOSInstallerEntry) -> some View {
         let isSelected = selectedInstallerID == entry.id
-        let supportsMontereyDownload = supportsMontereyDownload(entry)
+        let supportsProductionDownload = supportsProductionDownload(entry)
 
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 12) {
@@ -186,8 +186,8 @@ extension MacOSDownloaderWindowShellView {
                         .padding(.vertical, 7)
                     }
                     .macUSBPrimaryButtonStyle()
-                    .disabled(!supportsMontereyDownload)
-                    .opacity(supportsMontereyDownload ? 1 : 0.6)
+                    .disabled(!supportsProductionDownload)
+                    .opacity(supportsProductionDownload ? 1 : 0.6)
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }

@@ -38,7 +38,9 @@ extension MontereyDownloadFlowModel {
 
             try verifyFileSize(for: localURL, expectedBytes: item.expectedSizeBytes, fileName: item.name)
             let isPackage = localURL.pathExtension.lowercased() == "pkg"
-            let signatureVerified = isPackage ? verifyPackageSignatureIfPossible(for: localURL) : false
+            if isPackage {
+                try verifyPackageSignature(for: localURL)
+            }
 
             if try await verifyIntegrityDataChunklistIfAvailable(for: localURL, item: item) {
                 try logSHA256VerificationDetails(for: localURL, item: item)
@@ -51,27 +53,12 @@ extension MontereyDownloadFlowModel {
                 continue
             }
 
-            if isPackage {
-                AppLogging.info(
-                    "Brak IntegrityData dla \(item.name). Uzywam fallback digest.",
-                    category: "Downloader"
-                )
-            }
             do {
                 try verifyDigestIfNeeded(for: localURL, item: item)
             } catch let digestFailure as DigestVerificationFailure {
-                if isPackage {
-                    guard signatureVerified else {
-                        throw DownloadFailureReason.verificationFailed(
-                            digestFailure.errorDescription ?? "Suma kontrolna pliku \(item.name) jest niepoprawna"
-                        )
-                    }
-                    AppLogging.info("Checksum mismatch dla \(item.name) zaakceptowany po fallbacku podpisu pakietu.", category: "Downloader")
-                } else {
-                    throw DownloadFailureReason.verificationFailed(
-                        digestFailure.errorDescription ?? "Suma kontrolna pliku \(item.name) jest niepoprawna"
-                    )
-                }
+                throw DownloadFailureReason.verificationFailed(
+                    digestFailure.errorDescription ?? "Suma kontrolna pliku \(item.name) jest niepoprawna"
+                )
             }
 
             try logSHA256VerificationDetails(for: localURL, item: item)
@@ -140,7 +127,7 @@ extension MontereyDownloadFlowModel {
         }
     }
 
-    private func verifyPackageSignatureIfPossible(for packageURL: URL) -> Bool {
+    private func verifyPackageSignature(for packageURL: URL) throws {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/sbin/pkgutil")
         task.arguments = ["--check-signature", packageURL.path]
@@ -154,25 +141,25 @@ extension MontereyDownloadFlowModel {
             try task.run()
             task.waitUntilExit()
         } catch {
-            AppLogging.error(
-                "Nie udalo sie uruchomic pkgutil dla \(packageURL.lastPathComponent): \(error.localizedDescription)",
-                category: "Downloader"
+            throw DownloadFailureReason.verificationFailed(
+                "Nie udalo sie uruchomic pkgutil dla \(packageURL.lastPathComponent): \(error.localizedDescription)"
             )
-            return false
         }
+
+        let output = String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let errors = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let details = [output, errors].joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
 
         if task.terminationStatus != 0 {
-            let output = String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            let errors = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
-            let details = [output, errors].joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
-            AppLogging.error(
-                "Podpis pakietu nie zostal potwierdzony przez pkgutil dla \(packageURL.lastPathComponent)\(details.isEmpty ? "" : ": \(details)")",
-                category: "Downloader"
+            throw DownloadFailureReason.verificationFailed(
+                "Podpis pakietu nie zostal potwierdzony przez pkgutil dla \(packageURL.lastPathComponent)\(details.isEmpty ? "" : ": \(details)")"
             )
-            return false
         }
 
-        return true
+        AppLogging.info(
+            "Podpis pakietu potwierdzony (pkgutil) dla \(packageURL.lastPathComponent)\(details.isEmpty ? "" : ": \(details)")",
+            category: "Downloader"
+        )
     }
 
     private func verifyIntegrityDataChunklistIfAvailable(

@@ -70,7 +70,7 @@ Update this section when startup permission order, permission prompts, or permis
 - Tools menu includes `Download macOS installer...`, which opens a dedicated downloader sheet.
 - Entering the downloader sheet triggers on-demand discovery (not app startup discovery) of officially available macOS/OS X installers from Apple endpoints.
 - During discovery, downloader keeps the systems-list header visible and shows an inline progress panel (in the list area) with cancel action; options stay visible but disabled until scanning completes, then the panel transitions out and grouped installer entries are shown.
-- Production download flow is currently enabled for selected `macOS Monterey` entries: preflight fetches real package manifest and sizes, then downloader runs sequential download, verification, helper-based `.app` assembly, and summary.
+- Production download flow is currently enabled for selected entries in `macOS Big Sur`, `Monterey`, `Ventura`, `Sonoma`, `Sequoia`, and `Tahoe`: preflight fetches real package manifest and sizes, then downloader runs sequential download, verification, helper-based `.app` assembly, and summary.
 - Download artifacts are staged in `macUSB_temp/downloads/<session_id>` and final installer is moved to `~/Poza iCloud` with collision suffixing (`(2)`, `(3)`, ...).
 - In `DEBUG` builds, downloader options include `DEBUG: Nie usuwaj pobranych plikow`; when enabled, session files are retained after success/failure/cancel until application shutdown cleanup.
 - Application termination performs final cleanup of `macUSB_temp` to avoid leaving temporary downloader artifacts across sessions.
@@ -259,7 +259,7 @@ Core docs:
 
 Core runtime areas:
 - `macUSB/Features/Analysis/*` — source analysis and USB selection behavior.
-- `macUSB/Features/Downloader/*` — downloader module split into `UI/*` (window shell + list/process/summary views), `Logic/*` (discovery + production Monterey download/verify/assembly/cleanup), and `MacOSDownloaderCoordinator.swift` (window lifecycle/orchestration entry).
+- `macUSB/Features/Downloader/*` — downloader module split into `UI/*` (window shell + list/process/summary views), `Logic/*` (discovery + production Big Sur/Monterey/Ventura/Sonoma/Sequoia/Tahoe download/verify/assembly/cleanup), and `MacOSDownloaderCoordinator.swift` (window lifecycle/orchestration entry).
 - `macUSB/Features/Installation/*` — summary/start/progress orchestration.
 - `macUSB/Features/Finish/*` — result behavior and fallback cleanup UX.
 - `macUSB/Shared/Services/Helper/*` — app-side helper integration:
@@ -287,7 +287,7 @@ Core runtime areas:
 - `DownloaderAssembly/DownloaderAssemblyProcess.swift`
 - `macUSB/Resources/Localizable.xcstrings` — localization catalog.
 
-Downloader includes production runtime behavior for Monterey download flow; USB creation and analysis contracts remain untouched.
+Downloader includes production runtime behavior for Big Sur, Monterey, Ventura, Sonoma, Sequoia, and Tahoe download flow; USB creation and analysis contracts remain untouched.
 
 File relationships and responsibilities should remain consistent with runtime contracts above.
 
