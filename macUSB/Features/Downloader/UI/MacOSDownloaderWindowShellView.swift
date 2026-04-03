@@ -58,7 +58,8 @@ struct MacOSDownloaderWindowShellView: View {
         .sheet(isPresented: $isOptionsPresented) {
             MacOSDownloaderOptionsSheetView(
                 showAllAvailableVersions: $showAllAvailableVersions,
-                preserveDownloadedFilesInDebug: $downloadFlowModel.preserveDownloadedFilesInDebug
+                preserveDownloadedFilesInDebug: $downloadFlowModel.preserveDownloadedFilesInDebug,
+                patchLegacyDistributionInDebug: $downloadFlowModel.patchLegacyDistributionInDebug
             )
         }
         .task {
@@ -156,7 +157,11 @@ struct MacOSDownloaderWindowShellView: View {
         if supportedMajors.contains(major) {
             return true
         }
+        if normalizedName.contains("catalina") && entry.version.hasPrefix("10.15") {
+            return true
+        }
         return normalizedName.contains("big sur")
+            || normalizedName.contains("catalina")
             || normalizedName.contains("monterey")
             || normalizedName.contains("ventura")
             || normalizedName.contains("sonoma")
@@ -167,7 +172,7 @@ struct MacOSDownloaderWindowShellView: View {
     func handleDownloadTap(for entry: MacOSInstallerEntry) {
         guard supportsProductionDownload(entry) else {
             AppLogging.info(
-                "Pobieranie jest obecnie dostepne tylko dla: macOS Big Sur, Monterey, Ventura, Sonoma, Sequoia i Tahoe.",
+                "Pobieranie jest obecnie dostepne tylko dla: macOS Catalina, Big Sur, Monterey, Ventura, Sonoma, Sequoia i Tahoe.",
                 category: "Downloader"
             )
             return
@@ -220,6 +225,7 @@ struct MacOSDownloaderWindowShellView: View {
 private struct MacOSDownloaderOptionsSheetView: View {
     @Binding var showAllAvailableVersions: Bool
     @Binding var preserveDownloadedFilesInDebug: Bool
+    @Binding var patchLegacyDistributionInDebug: Bool
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -239,6 +245,9 @@ private struct MacOSDownloaderOptionsSheetView: View {
                 .foregroundStyle(.secondary)
 
             Toggle("DEBUG: Nie usuwaj pobranych plików", isOn: $preserveDownloadedFilesInDebug)
+                .toggleStyle(.checkbox)
+
+            Toggle("DEBUG: Patchuj .dist dla Legacy (bez blokady sprzętu)", isOn: $patchLegacyDistributionInDebug)
                 .toggleStyle(.checkbox)
             #endif
 

@@ -49,6 +49,8 @@ enum DownloadFailureReason: LocalizedError {
     }
 }
 
+private let internetReconnectTimeoutSeconds = 60
+
 struct DownloadManifestItem: Identifiable, Hashable {
     let order: Int
     let name: String
@@ -79,6 +81,7 @@ struct DownloadManifest: Hashable {
     let systemName: String
     let systemVersion: String
     let systemBuild: String
+    let distributionURL: URL?
     let items: [DownloadManifestItem]
     let totalExpectedBytes: Int64
 }
@@ -92,6 +95,7 @@ final class MontereyDownloadFlowModel: ObservableObject {
     @Published var failureMessage: String?
     @Published var isPartialSuccess: Bool = false
     @Published var cleanupWarningMessage: String?
+    @Published var networkWarningMessage: String?
 
     @Published var connectionStatusText: String = "Weryfikuję połączenie z serwerami Apple..."
     @Published var downloadCurrentIndex: Int = 0
@@ -116,6 +120,7 @@ final class MontereyDownloadFlowModel: ObservableObject {
     @Published var discoveredDownloadItems: [DownloadManifestItem] = []
 
     @Published var preserveDownloadedFilesInDebug: Bool = false
+    @Published var patchLegacyDistributionInDebug: Bool = false
 
     var workflowTask: Task<Void, Never>?
     var processStartedAt: Date?
@@ -184,6 +189,7 @@ final class MontereyDownloadFlowModel: ObservableObject {
         failureMessage = nil
         isPartialSuccess = false
         cleanupWarningMessage = nil
+        networkWarningMessage = nil
 
         connectionStatusText = "Weryfikuję połączenie z serwerami Apple..."
         downloadCurrentIndex = 0
@@ -262,7 +268,6 @@ final class MontereyDownloadFlowModel: ObservableObject {
             }
         } catch {
             let technicalMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            failureMessage = userFacingFailureMessage(for: technicalMessage)
             workflowState = .failed
             let isCleanupFailure = {
                 if case DownloadFailureReason.cleanupFailed = error { return true }
@@ -283,6 +288,16 @@ final class MontereyDownloadFlowModel: ObservableObject {
                         category: "Downloader"
                     )
                 }
+            }
+
+            if isInternetTimeoutFailure(technicalMessage) {
+                if completedStages.contains(.cleanup) {
+                    failureMessage = "Pobieranie zatrzymano, bo przez 1 minutę nie udało się przywrócić połączenia z internetem. Pobrane pliki tymczasowe zostały usunięte"
+                } else {
+                    failureMessage = "Pobieranie zatrzymano, bo przez 1 minutę nie udało się przywrócić połączenia z internetem. Nie udało się potwierdzić usunięcia plików tymczasowych"
+                }
+            } else {
+                failureMessage = userFacingFailureMessage(for: technicalMessage)
             }
 
             if isCleanupFailure, finalInstallerAppURL != nil {
@@ -314,6 +329,12 @@ final class MontereyDownloadFlowModel: ObservableObject {
             || normalized.contains("permission")
             || normalized.contains("access")
         return moveFailure && permissionFailure
+    }
+
+    private func isInternetTimeoutFailure(_ message: String) -> Bool {
+        let normalized = message.lowercased()
+        return normalized.contains("brak dostępu do internetu przez ponad 1 minutę")
+            || normalized.contains("brak dostepu do internetu przez ponad 1 minute")
     }
 
     func runConnectionCheck(
@@ -416,9 +437,11 @@ final class MontereyDownloadFlowModel: ObservableObject {
             }
 
             downloadCurrentIndex = index + 1
-            downloadFileName = item.name
+            downloadFileName = "Pobieranie \(item.name)..."
 
-            let itemDestinationURL = payloadURL.appendingPathComponent("\(index + 1)_\(sanitizeFileName(item.name))")
+            let itemDestinationURL = payloadURL.appendingPathComponent(
+                destinationFileName(for: item, index: index, manifest: manifest)
+            )
             let startedAt = Date()
             var lastSampleDate = startedAt
             var lastSampleBytes: Int64 = 0
@@ -478,6 +501,25 @@ final class MontereyDownloadFlowModel: ObservableObject {
             } catch is CancellationError {
                 throw CancellationError()
             } catch {
+                if isOfflineDownloadError(error) {
+                    AppLogging.error(
+                        "Wykryto brak dostepu do internetu podczas pobierania \(item.name). Oczekiwanie na ponowne polaczenie (maksymalnie 60 sekund).",
+                        category: "Downloader"
+                    )
+                    let recovered = try await waitForInternetReconnect(timeoutSeconds: internetReconnectTimeoutSeconds, probeURL: item.url)
+                    if recovered {
+                        networkWarningMessage = nil
+                        downloadFileName = "Pobieranie \(item.name)..."
+                        AppLogging.info(
+                            "Polaczenie internetowe przywrocone. Wznawiam pobieranie \(item.name).",
+                            category: "Downloader"
+                        )
+                        continue
+                    }
+
+                    throw DownloadFailureReason.downloadFailed("Brak dostępu do internetu przez ponad 1 minutę")
+                }
+
                 lastError = error
                 if attempt < attempts {
                     let delayNanoseconds = UInt64(500_000_000 * attempt * attempt)
@@ -492,6 +534,60 @@ final class MontereyDownloadFlowModel: ObservableObject {
         }
 
         throw lastError ?? DownloadFailureReason.downloadFailed("Nieznany blad pobierania")
+    }
+
+    private func isOfflineDownloadError(_ error: Error) -> Bool {
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
+                return true
+            default:
+                return false
+            }
+        }
+
+        let message = (error as NSError).localizedDescription.lowercased()
+        return message.contains("not connected to internet")
+            || message.contains("network connection was lost")
+            || message.contains("brak dostępu do internetu")
+            || message.contains("brak dostepu do internetu")
+            || message.contains("połączenie z siecią zostało utracone")
+            || message.contains("polaczenie z siecia zostalo utracone")
+    }
+
+    private func waitForInternetReconnect(timeoutSeconds: Int, probeURL: URL) async throws -> Bool {
+        let start = Date()
+        while Int(Date().timeIntervalSince(start)) < timeoutSeconds {
+            try Task.checkCancellation()
+            let elapsed = Int(Date().timeIntervalSince(start))
+            let remaining = max(0, timeoutSeconds - elapsed)
+
+            networkWarningMessage = "Połączenie sieciowe jest niedostępne. Spróbuję wznowić pobieranie automatycznie (\(remaining)s)..."
+            downloadSpeedText = "0.0 MB/s"
+
+            if await probeReachability(url: probeURL) {
+                return true
+            }
+
+            try await Task.sleep(nanoseconds: 2_000_000_000)
+        }
+        networkWarningMessage = nil
+        return false
+    }
+
+    private func probeReachability(url: URL) async -> Bool {
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"
+        request.timeoutInterval = 5
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else { return false }
+            return (200...499).contains(httpResponse.statusCode)
+        } catch {
+            return false
+        }
     }
 
     func shouldRetainSessionFilesForDebugMode() -> Bool {
@@ -514,6 +610,27 @@ final class MontereyDownloadFlowModel: ObservableObject {
             with: "_",
             options: .regularExpression
         )
+    }
+
+    private func destinationFileName(
+        for item: DownloadManifestItem,
+        index: Int,
+        manifest: DownloadManifest
+    ) -> String {
+        if usesLegacyInstallerWorkflow(for: manifest) {
+            let preserved = item.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !preserved.isEmpty {
+                return preserved.replacingOccurrences(of: "/", with: "_")
+            }
+        }
+        return "\(index + 1)_\(sanitizeFileName(item.name))"
+    }
+
+    private func usesLegacyInstallerWorkflow(for manifest: DownloadManifest) -> Bool {
+        manifest.items.contains { item in
+            item.name.caseInsensitiveCompare("InstallAssistantAuto.pkg") == .orderedSame
+                || item.url.lastPathComponent.caseInsensitiveCompare("InstallAssistantAuto.pkg") == .orderedSame
+        }
     }
 
     func downloadItem(
@@ -667,7 +784,11 @@ final class FileDownloadTaskDelegate: NSObject, URLSessionDownloadDelegate {
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         guard let error else { return }
-        continuation?.resume(throwing: DownloadFailureReason.downloadFailed(error.localizedDescription))
+        if let urlError = error as? URLError {
+            continuation?.resume(throwing: urlError)
+        } else {
+            continuation?.resume(throwing: DownloadFailureReason.downloadFailed(error.localizedDescription))
+        }
         continuation = nil
     }
 }

@@ -31,6 +31,26 @@ extension MacOSDownloaderWindowShellView {
                     if downloadFlowModel.isFinished {
                         downloadSummaryView
                     } else {
+                        if let networkWarningMessage = downloadFlowModel.networkWarningMessage,
+                           !networkWarningMessage.isEmpty {
+                            StatusCard(tone: .warning, density: .compact) {
+                                HStack(alignment: .top, spacing: 10) {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.title3)
+                                        .foregroundStyle(.orange)
+
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Brak połączenia z internetem")
+                                            .font(.subheadline.weight(.semibold))
+                                        Text(networkWarningMessage)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer(minLength: 0)
+                                }
+                            }
+                        }
+
                         if let failureMessage = downloadFlowModel.failureMessage,
                            !failureMessage.isEmpty {
                             StatusCard(tone: .warning, density: .compact) {

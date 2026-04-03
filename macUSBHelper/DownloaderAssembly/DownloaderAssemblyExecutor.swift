@@ -9,6 +9,7 @@ final class DownloaderAssemblyExecutor {
     let stateQueue = DispatchQueue(label: "macUSB.helper.downloaderAssembly.state")
     var activeProcess: Process?
     var isCancelled = false
+    var assemblyPackageName: String = "InstallAssistant.pkg"
 
     init(
         request: DownloaderAssemblyRequestPayload,
@@ -52,14 +53,28 @@ final class DownloaderAssemblyExecutor {
                 throw NSError(
                     domain: "macUSBHelper",
                     code: 404,
-                    userInfo: [NSLocalizedDescriptionKey: "Nie znaleziono InstallAssistant.pkg w sesji pobierania."]
+                    userInfo: [NSLocalizedDescriptionKey: "Nie znaleziono pakietu instalatora w sesji pobierania (\(packageURL.lastPathComponent))."]
                 )
             }
+            assemblyPackageName = packageURL.lastPathComponent
 
             try FileManager.default.createDirectory(at: outputDirectoryPath, withIntermediateDirectories: true)
 
-            emit(percent: 0.10, status: "Instalacja pakietu InstallAssistant.pkg")
-            let assembledAppURL = try runInstallerAndLocateApp(packageURL: packageURL)
+            let assembledAppURL: URL
+            if packageURL.pathExtension.caseInsensitiveCompare("dist") == .orderedSame {
+                emit(percent: 0.10, status: "Instalacja dystrybucji \(assemblyPackageName)")
+                assembledAppURL = try runLegacyDistributionAndLocateApp(
+                    distributionURL: packageURL,
+                    sessionRootDirectory: sessionRootDirectory,
+                    patchLegacyDistribution: request.patchLegacyDistributionInDebug
+                )
+            } else {
+                emit(percent: 0.10, status: "Instalacja pakietu \(assemblyPackageName)")
+                assembledAppURL = try runInstallerAndLocateApp(
+                    packageURL: packageURL,
+                    applyLegacyCompatibilityEnvironment: assemblyPackageName.caseInsensitiveCompare("InstallAssistantAuto.pkg") == .orderedSame
+                )
+            }
 
             try throwIfCancelled()
             let finalDestinationURL = assembledAppURL

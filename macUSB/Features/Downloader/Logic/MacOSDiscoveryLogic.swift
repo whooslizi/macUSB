@@ -343,9 +343,10 @@ private struct MacOSCatalogService {
         let majorVersion = entry.version.split(separator: ".").first.map(String.init) ?? ""
         let normalizedName = entry.name.lowercased()
         let supportedMajors: Set<String> = ["11", "12", "13", "14", "15", "26"]
-        let supportedNameTokens = ["big sur", "monterey", "ventura", "sonoma", "sequoia", "tahoe"]
+        let supportedNameTokens = ["catalina", "big sur", "monterey", "ventura", "sonoma", "sequoia", "tahoe"]
         let hasSupportedName = supportedNameTokens.contains { normalizedName.contains($0) }
-        guard supportedMajors.contains(majorVersion) || hasSupportedName else {
+        let isCatalina = normalizedName.contains("catalina") && entry.version.hasPrefix("10.15")
+        guard supportedMajors.contains(majorVersion) || hasSupportedName || isCatalina else {
             throw DiscoveryError.unsupportedEntry
         }
         guard let productID = entry.catalogProductID, !productID.isEmpty else {
@@ -358,6 +359,16 @@ private struct MacOSCatalogService {
         guard let product = products[productID] else {
             throw DiscoveryError.productNotFound(productID)
         }
+        let distributionURL: URL? = {
+            guard
+                let distributions = product["Distributions"] as? [String: Any],
+                let url = preferredDistributionURL(from: distributions),
+                isAllowedHost(url)
+            else {
+                return nil
+            }
+            return url
+        }()
 
         phase(String(localized: "Analiza listy plików i metadanych..."))
         var descriptors = packageDescriptors(from: product)
@@ -405,6 +416,7 @@ private struct MacOSCatalogService {
             systemName: entry.name,
             systemVersion: entry.version,
             systemBuild: entry.build,
+            distributionURL: distributionURL,
             items: manifestItems,
             totalExpectedBytes: totalExpectedBytes
         )

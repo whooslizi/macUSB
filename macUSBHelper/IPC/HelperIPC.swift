@@ -50,6 +50,7 @@ struct DownloaderAssemblyRequestPayload: Codable {
     let finalDestinationDirectoryPath: String
     let cleanupSessionFiles: Bool
     let requesterUID: UInt32
+    let patchLegacyDistributionInDebug: Bool
 }
 
 struct DownloaderAssemblyProgressPayload: Codable {

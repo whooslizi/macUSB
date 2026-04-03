@@ -14,10 +14,247 @@ extension DownloaderAssemblyExecutor {
         }
     }
 
-    func runInstallerAndLocateApp(packageURL: URL) throws -> URL {
+    func runLegacyDistributionAndLocateApp(
+        distributionURL: URL,
+        sessionRootDirectory: URL,
+        patchLegacyDistribution: Bool
+    ) throws -> URL {
+        let effectiveDistributionURL: URL
+        if patchLegacyDistribution {
+            effectiveDistributionURL = try createPatchedLegacyDistribution(
+                from: distributionURL,
+                sessionRootDirectory: sessionRootDirectory
+            )
+        } else {
+            effectiveDistributionURL = distributionURL
+        }
+
+        let imageURL = sessionRootDirectory.appendingPathComponent("legacy_installer_workspace.dmg")
+        let mountURL = sessionRootDirectory.appendingPathComponent("legacy_installer_mount", isDirectory: true)
+
+        if FileManager.default.fileExists(atPath: mountURL.path) {
+            try? runCommand(
+                executable: "/usr/bin/hdiutil",
+                arguments: ["detach", mountURL.path, "-force"]
+            )
+            try? FileManager.default.removeItem(at: mountURL)
+        }
+        if FileManager.default.fileExists(atPath: imageURL.path) {
+            try? FileManager.default.removeItem(at: imageURL)
+        }
+        try FileManager.default.createDirectory(at: mountURL, withIntermediateDirectories: true)
+
+        let imageSizeGB = calculateLegacyImageSizeGB(from: distributionURL.deletingLastPathComponent())
+        emit(
+            percent: 0.12,
+            status: "Tworzenie tymczasowego obrazu legacy",
+            logLine: "legacy-assembly create-image size=\(imageSizeGB)g path=\(imageURL.path)"
+        )
+
+        try runCommand(
+            executable: "/usr/bin/hdiutil",
+            arguments: [
+                "create",
+                "-fs", "HFS+",
+                "-layout", "SPUD",
+                "-size", "\(imageSizeGB)g",
+                "-volname", "macUSBLegacyInstaller",
+                "-ov",
+                imageURL.path
+            ]
+        )
+
+        try runCommand(
+            executable: "/usr/bin/hdiutil",
+            arguments: [
+                "attach",
+                imageURL.path,
+                "-noverify",
+                "-nobrowse",
+                "-mountpoint", mountURL.path
+            ]
+        )
+
+        defer {
+            try? runCommand(
+                executable: "/usr/bin/hdiutil",
+                arguments: ["detach", mountURL.path, "-force"]
+            )
+            try? FileManager.default.removeItem(at: mountURL)
+            try? FileManager.default.removeItem(at: imageURL)
+        }
+
+        let installerEnvironment = ProcessInfo.processInfo.environment.merging(["CM_BUILD": "CM_BUILD"]) { current, _ in current }
+        emit(
+            percent: 0.15,
+            status: "Instalacja dystrybucji \(assemblyPackageName)",
+            logLine: "legacy-assembly installer start dist=\(effectiveDistributionURL.path) target=\(mountURL.path)"
+        )
+
+        try runInstallerProcess(
+            installerInputURL: effectiveDistributionURL,
+            targetPath: mountURL.path,
+            statusText: "Instalacja dystrybucji \(assemblyPackageName)",
+            environment: installerEnvironment
+        )
+
+        guard let mountedInstallerURL = locateInstallerApp(onMountedVolume: mountURL) else {
+            throw NSError(
+                domain: "macUSBHelper",
+                code: 404,
+                userInfo: [NSLocalizedDescriptionKey: "Nie znaleziono aplikacji instalatora na tymczasowym obrazie legacy."]
+            )
+        }
+
+        let destinationURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
+            .appendingPathComponent(request.expectedAppName, isDirectory: true)
+        if FileManager.default.fileExists(atPath: destinationURL.path) {
+            try FileManager.default.removeItem(at: destinationURL)
+        }
+
+        emit(
+            percent: 0.90,
+            status: "Kopiowanie instalatora do /Applications",
+            logLine: "legacy-assembly copy app source=\(mountedInstallerURL.path) destination=\(destinationURL.path)"
+        )
+        try runCommand(
+            executable: "/usr/bin/ditto",
+            arguments: [mountedInstallerURL.path, destinationURL.path]
+        )
+
+        emit(
+            percent: 0.94,
+            status: "Instalator legacy gotowy w /Applications",
+            logLine: "legacy-assembly copy success destination=\(destinationURL.path)"
+        )
+        return destinationURL
+    }
+
+    private func createPatchedLegacyDistribution(
+        from originalDistributionURL: URL,
+        sessionRootDirectory: URL
+    ) throws -> URL {
+        let data = try Data(contentsOf: originalDistributionURL)
+        guard var text = String(data: data, encoding: .utf8), !text.isEmpty else {
+            throw NSError(
+                domain: "macUSBHelper",
+                code: 500,
+                userInfo: [NSLocalizedDescriptionKey: "Nie udalo sie odczytac pliku .dist do patchowania."]
+            )
+        }
+
+        let originalLength = text.count
+        text = patchLegacyDistributionXML(text)
+        if text == String(data: data, encoding: .utf8) {
+            emit(
+                percent: nil,
+                status: "Instalacja dystrybucji \(assemblyPackageName)",
+                logLine: "legacy-dist patch: brak zmian w tresci (pattern not matched) source=\(originalDistributionURL.path)"
+            )
+        } else {
+            emit(
+                percent: nil,
+                status: "Instalacja dystrybucji \(assemblyPackageName)",
+                logLine: "legacy-dist patch: zastosowano modyfikacje zgodnosci source=\(originalDistributionURL.path) chars_before=\(originalLength) chars_after=\(text.count)"
+            )
+        }
+
+        let backupOriginalURL = sessionRootDirectory
+            .appendingPathComponent("original_\(originalDistributionURL.lastPathComponent)")
+        if FileManager.default.fileExists(atPath: backupOriginalURL.path) {
+            try? FileManager.default.removeItem(at: backupOriginalURL)
+        }
+        try runCommand(
+            executable: "/usr/bin/ditto",
+            arguments: [originalDistributionURL.path, backupOriginalURL.path]
+        )
+
+        let patchedURL = originalDistributionURL
+        guard let patchedData = text.data(using: .utf8) else {
+            throw NSError(
+                domain: "macUSBHelper",
+                code: 500,
+                userInfo: [NSLocalizedDescriptionKey: "Nie udalo sie zakodowac patchowanego pliku .dist do UTF-8."]
+            )
+        }
+        try patchedData.write(to: patchedURL, options: .atomic)
+        emit(
+            percent: nil,
+            status: "Instalacja dystrybucji \(assemblyPackageName)",
+            logLine: "legacy-dist patch: backup original=\(backupOriginalURL.path) patched-in-place=\(patchedURL.path)"
+        )
+        return patchedURL
+    }
+
+    private func patchLegacyDistributionXML(_ xml: String) -> String {
+        var patched = xml
+
+        patched = regexReplace(
+            in: patched,
+            pattern: #"\s+hostArchitectures="[^"]*""#,
+            template: ""
+        )
+        patched = regexReplace(
+            in: patched,
+            pattern: #"<installation-check\b[^>]*script="[^"]*"[^>]*/>"#,
+            template: #"<installation-check script="return true;"/>"#
+        )
+
+        return patched
+    }
+
+    private func regexReplace(in text: String, pattern: String, template: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+            return text
+        }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        return regex.stringByReplacingMatches(in: text, options: [], range: range, withTemplate: template)
+    }
+
+    func runInstallerAndLocateApp(
+        packageURL: URL,
+        applyLegacyCompatibilityEnvironment: Bool = false
+    ) throws -> URL {
+        let environment: [String: String]?
+        if applyLegacyCompatibilityEnvironment {
+            environment = ProcessInfo.processInfo.environment.merging(["CM_BUILD": "CM_BUILD"]) { current, _ in current }
+            emit(
+                percent: nil,
+                status: "Instalacja pakietu \(assemblyPackageName)",
+                logLine: "legacy-assembly compatibility: ustawiono CM_BUILD dla \(packageURL.lastPathComponent)"
+            )
+        } else {
+            environment = nil
+        }
+
+        try runInstallerProcess(
+            installerInputURL: packageURL,
+            targetPath: "/",
+            statusText: "Instalacja pakietu \(assemblyPackageName)",
+            environment: environment
+        )
+
+        guard let appURL = locateInstalledInstallerApp() else {
+            throw NSError(
+                domain: "macUSBHelper",
+                code: 404,
+                userInfo: [NSLocalizedDescriptionKey: "Nie znaleziono zbudowanej aplikacji instalatora w /Applications."]
+            )
+        }
+
+        return appURL
+    }
+
+    private func runInstallerProcess(
+        installerInputURL: URL,
+        targetPath: String,
+        statusText: String,
+        environment: [String: String]?
+    ) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/installer")
-        process.arguments = ["-pkg", packageURL.path, "-target", "/", "-verboseR"]
+        process.arguments = ["-pkg", installerInputURL.path, "-target", targetPath, "-verboseR"]
+        process.environment = environment
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = pipe
@@ -37,7 +274,7 @@ extension DownloaderAssemblyExecutor {
             }
             buffer.append(chunk)
             drainOutputLines(from: &buffer) { [weak self] line in
-                self?.emitInstallerLine(line)
+                self?.emitInstallerLine(line, statusText: statusText)
             }
             try throwIfCancelled()
         }
@@ -46,7 +283,7 @@ extension DownloaderAssemblyExecutor {
            let tailLine = String(data: buffer, encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines),
            !tailLine.isEmpty {
-            emitInstallerLine(tailLine)
+            emitInstallerLine(tailLine, statusText: statusText)
         }
 
         process.waitUntilExit()
@@ -62,18 +299,74 @@ extension DownloaderAssemblyExecutor {
                 userInfo: [NSLocalizedDescriptionKey: "Polecenie installer zakonczone bledem (\(process.terminationStatus))."]
             )
         }
+    }
 
-        guard let appURL = locateInstalledMontereyApp() else {
-            throw NSError(
-                domain: "macUSBHelper",
-                code: 404,
-                userInfo: [NSLocalizedDescriptionKey: "Nie znaleziono zbudowanej aplikacji instalatora w /Applications."]
-            )
+    private func locateInstallerApp(onMountedVolume mountURL: URL) -> URL? {
+        let canonicalApplications = mountURL.appendingPathComponent("Applications", isDirectory: true)
+        let fusedApplications = URL(fileURLWithPath: mountURL.path + "Applications", isDirectory: true)
+
+        let candidates = [canonicalApplications, fusedApplications]
+        for applicationsURL in candidates {
+            let expected = applicationsURL.appendingPathComponent(request.expectedAppName, isDirectory: true)
+            if FileManager.default.fileExists(atPath: expected.path) {
+                return expected
+            }
+            if let found = newestInstallerApp(in: applicationsURL) {
+                return found
+            }
+        }
+        return nil
+    }
+
+    private func newestInstallerApp(in applicationsURL: URL) -> URL? {
+        guard let entries = try? FileManager.default.contentsOfDirectory(
+            at: applicationsURL,
+            includingPropertiesForKeys: [.contentModificationDateKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return nil
         }
 
-        return appURL
+        let installers = entries.filter { url in
+            let name = url.lastPathComponent.lowercased()
+            return name.hasPrefix("install macos") && name.hasSuffix(".app")
+        }
+
+        return installers.max { lhs, rhs in
+            let lhsDate = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            let rhsDate = (try? rhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
+            return lhsDate < rhsDate
+        }
     }
-    func locateInstalledMontereyApp() -> URL? {
+
+    private func calculateLegacyImageSizeGB(from payloadDirectory: URL) -> Int {
+        let requiredBytes = directorySizeBytes(at: payloadDirectory)
+        let requiredGB = Int(ceil(Double(requiredBytes) / 1_000_000_000.0))
+        return max(16, requiredGB + 4)
+    }
+
+    private func directorySizeBytes(at rootURL: URL) -> Int64 {
+        guard let enumerator = FileManager.default.enumerator(
+            at: rootURL,
+            includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return 0
+        }
+
+        var total: Int64 = 0
+        for case let fileURL as URL in enumerator {
+            guard let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
+                  values.isRegularFile == true,
+                  let size = values.fileSize
+            else {
+                continue
+            }
+            total += Int64(size)
+        }
+        return total
+    }
+    func locateInstalledInstallerApp() -> URL? {
         let expectedURL = URL(fileURLWithPath: "/Applications")
             .appendingPathComponent(request.expectedAppName, isDirectory: true)
         if FileManager.default.fileExists(atPath: expectedURL.path) {
@@ -100,16 +393,17 @@ extension DownloaderAssemblyExecutor {
             return lhsDate < rhsDate
         }
     }
-    func emitInstallerLine(_ rawLine: String) {
+    func emitInstallerLine(_ rawLine: String, statusText: String? = nil) {
         let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !line.isEmpty else { return }
+        let resolvedStatusText = statusText ?? "Instalacja pakietu \(assemblyPackageName)"
 
         if let percent = parseInstallerPercent(from: line) {
             let normalized = min(max(percent / 100.0, 0), 1)
             let scaled = 0.10 + (normalized * 0.72)
-            emit(percent: scaled, status: "Instalacja pakietu InstallAssistant.pkg", logLine: line)
+            emit(percent: scaled, status: resolvedStatusText, logLine: line)
         } else {
-            emit(percent: nil, status: "Instalacja pakietu InstallAssistant.pkg", logLine: line)
+            emit(percent: nil, status: resolvedStatusText, logLine: line)
         }
     }
     func parseInstallerPercent(from line: String) -> Double? {
@@ -134,10 +428,11 @@ extension DownloaderAssemblyExecutor {
             buffer.removeSubrange(0...newlineRange.lowerBound)
         }
     }
-    func runCommand(executable: String, arguments: [String]) throws {
+    func runCommand(executable: String, arguments: [String], environment: [String: String]? = nil) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
+        process.environment = environment
         try process.run()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else {

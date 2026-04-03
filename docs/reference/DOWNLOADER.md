@@ -13,7 +13,7 @@ Scope note:
 3. [Architecture Overview](#3-architecture-overview)
 4. [Data Model and State](#4-data-model-and-state)
 5. [Discovery Flow (Apple Catalog)](#5-discovery-flow-apple-catalog)
-6. [Production Download Flow (Big Sur to Tahoe)](#6-production-download-flow-big-sur-to-tahoe)
+6. [Production Download Flow (Catalina to Tahoe)](#6-production-download-flow-catalina-to-tahoe)
 7. [Verification Strategy](#7-verification-strategy)
 8. [Helper Integration](#8-helper-integration)
 9. [UI Contract](#9-ui-contract)
@@ -35,7 +35,7 @@ Downloader provides:
 - deterministic temp cleanup and end-state summary.
 
 Current production scope:
-- full download pipeline is enabled for selected Big Sur, Monterey, Ventura, Sonoma, Sequoia, and Tahoe entries,
+- full download pipeline is enabled for selected Catalina, Big Sur, Monterey, Ventura, Sonoma, Sequoia, and Tahoe entries,
 - discovery includes broad Apple-official stable entries across families.
 
 ---
@@ -66,7 +66,7 @@ Downloader split:
 Runtime orchestration:
 - `MacOSDownloaderWindowShellView` owns:
   - `MacOSDownloaderLogic` for discovery,
-  - `MontereyDownloadFlowModel` for staged download pipeline (Big Sur through Tahoe scope).
+  - `MontereyDownloadFlowModel` for staged download pipeline (Catalina through Tahoe scope).
 
 ---
 
@@ -112,9 +112,13 @@ Discovery UX contract:
 
 ---
 
-## 6. Production Download Flow (Big Sur to Tahoe)
+## 6. Production Download Flow (Catalina to Tahoe)
 
-Production pipeline (`MontereyDownloadFlowModel`) for Big Sur, Monterey, Ventura, Sonoma, Sequoia, and Tahoe:
+Production pipeline (`MontereyDownloadFlowModel`) uses two compatible distribution modes:
+- `Modern`: Big Sur, Monterey, Ventura, Sonoma, Sequoia, Tahoe (`InstallAssistant.pkg -> .app`).
+- `Legacy`: Catalina and compatible older Apple full-installer products (`InstallAssistantAuto.pkg` with companion payload packages).
+
+Both modes share the same staged UI and runtime skeleton:
 1. Connection / preflight
   - fetch real manifest for selected supported entry,
   - validate temporary disk capacity against total expected bytes + reserve.

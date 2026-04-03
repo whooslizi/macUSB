@@ -2,6 +2,11 @@ import Foundation
 import Darwin
 
 extension MontereyDownloadFlowModel {
+    private enum InstallerDistributionWorkflow: String {
+        case modern = "Modern"
+        case legacy = "Legacy"
+    }
+
     func runInstallerBuild(
         manifest: DownloadManifest,
         entry: MacOSInstallerEntry
@@ -10,20 +15,34 @@ extension MontereyDownloadFlowModel {
         buildStatusText = "Przygotowuję budowanie instalatora..."
         buildProgress = 0
 
-        guard let packageURL = locateInstallAssistantPackage(in: manifest) else {
-            throw DownloadFailureReason.assemblyFailed("Nie znaleziono pobranego InstallAssistant.pkg")
+        let assemblySelection = try resolveAssemblyInput(in: manifest)
+        let assemblyInputURL: URL
+        switch assemblySelection.workflow {
+        case .legacy:
+            assemblyInputURL = try await prepareLegacyDistributionInput(
+                manifest: manifest,
+                fallbackPackageURL: assemblySelection.inputURL
+            )
+        case .modern:
+            assemblyInputURL = assemblySelection.inputURL
         }
         guard let outputDirectory = activeSessionOutputURL else {
             throw DownloadFailureReason.assemblyFailed("Brak katalogu output sesji")
         }
 
+        AppLogging.info(
+            "Assembly workflow=\(assemblySelection.workflow.rawValue), input=\(assemblyInputURL.lastPathComponent), entry=\(entry.name) \(entry.version)",
+            category: "Downloader"
+        )
+
         let request = DownloaderAssemblyRequestPayload(
-            packagePath: packageURL.path,
+            packagePath: assemblyInputURL.path,
             outputDirectoryPath: outputDirectory.path,
             expectedAppName: expectedInstallerAppName(for: entry),
             finalDestinationDirectoryPath: "",
             cleanupSessionFiles: false,
-            requesterUID: getuid()
+            requesterUID: getuid(),
+            patchLegacyDistributionInDebug: shouldPatchLegacyDistributionInDebug()
         )
         cleanupDelegatedToHelper = request.cleanupSessionFiles
 
@@ -72,6 +91,14 @@ extension MontereyDownloadFlowModel {
         )
     }
 
+    private func shouldPatchLegacyDistributionInDebug() -> Bool {
+        #if DEBUG
+        return patchLegacyDistributionInDebug
+        #else
+        return false
+        #endif
+    }
+
     private func expectedInstallerAppName(for entry: MacOSInstallerEntry) -> String {
         let normalized = entry.name.replacingOccurrences(
             of: #"^(Install\s+)?"#,
@@ -82,14 +109,89 @@ extension MontereyDownloadFlowModel {
         return "Install \(baseName).app"
     }
 
-    private func locateInstallAssistantPackage(in manifest: DownloadManifest) -> URL? {
-        let preferred = manifest.items.first { item in
-            item.name.localizedCaseInsensitiveContains("InstallAssistant.pkg")
-                || item.url.lastPathComponent.localizedCaseInsensitiveContains("InstallAssistant.pkg")
+    private func resolveAssemblyInput(
+        in manifest: DownloadManifest
+    ) throws -> (inputURL: URL, workflow: InstallerDistributionWorkflow) {
+        if let legacyItem = manifest.items.first(where: { item in
+            item.name.caseInsensitiveCompare("InstallAssistantAuto.pkg") == .orderedSame
+                || item.url.lastPathComponent.caseInsensitiveCompare("InstallAssistantAuto.pkg") == .orderedSame
+        }) {
+            guard let url = downloadedFileURLsByItemID[legacyItem.id] else {
+                throw DownloadFailureReason.assemblyFailed("Nie znaleziono pobranego InstallAssistantAuto.pkg")
+            }
+            return (url, .legacy)
         }
 
-        guard let preferred else { return nil }
-        return downloadedFileURLsByItemID[preferred.id]
+        if let modernItem = manifest.items.first(where: { item in
+            item.name.caseInsensitiveCompare("InstallAssistant.pkg") == .orderedSame
+                || item.url.lastPathComponent.caseInsensitiveCompare("InstallAssistant.pkg") == .orderedSame
+        }) {
+            guard let url = downloadedFileURLsByItemID[modernItem.id] else {
+                throw DownloadFailureReason.assemblyFailed("Nie znaleziono pobranego InstallAssistant.pkg")
+            }
+            return (url, .modern)
+        }
+
+        throw DownloadFailureReason.assemblyFailed(
+            "Nie znaleziono pakietu instalatora dla wybranego systemu (wymagany InstallAssistant.pkg lub InstallAssistantAuto.pkg)"
+        )
+    }
+
+    private func prepareLegacyDistributionInput(
+        manifest: DownloadManifest,
+        fallbackPackageURL: URL
+    ) async throws -> URL {
+        guard let payloadURL = activeSessionPayloadURL else {
+            throw DownloadFailureReason.assemblyFailed("Brak katalogu payload sesji")
+        }
+        guard let distributionURL = manifest.distributionURL else {
+            throw DownloadFailureReason.assemblyFailed("Brak pliku .dist dla workflow Legacy")
+        }
+
+        let fileName = distributionURL.lastPathComponent.isEmpty
+            ? "\(manifest.productID).dist"
+            : distributionURL.lastPathComponent
+        let localDistributionURL = payloadURL.appendingPathComponent(fileName)
+
+        if FileManager.default.fileExists(atPath: localDistributionURL.path) {
+            AppLogging.info(
+                "Legacy assembly: wykorzystuje lokalny plik .dist \(localDistributionURL.lastPathComponent).",
+                category: "Downloader"
+            )
+            return localDistributionURL
+        }
+
+        AppLogging.info(
+            "Legacy assembly: pobieranie pliku .dist \(distributionURL.absoluteString).",
+            category: "Downloader"
+        )
+
+        var request = URLRequest(url: distributionURL)
+        request.timeoutInterval = 30
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            throw DownloadFailureReason.assemblyFailed("Nie udalo sie pobrac pliku .dist dla workflow Legacy")
+        }
+        if data.isEmpty {
+            throw DownloadFailureReason.assemblyFailed("Pobrany plik .dist jest pusty")
+        }
+
+        do {
+            try data.write(to: localDistributionURL, options: .atomic)
+        } catch {
+            throw DownloadFailureReason.assemblyFailed("Nie udalo sie zapisac pliku .dist: \(error.localizedDescription)")
+        }
+
+        AppLogging.info(
+            "Legacy assembly: zapisano .dist lokalnie pod \(localDistributionURL.path).",
+            category: "Downloader"
+        )
+        AppLogging.info(
+            "Legacy assembly: fallback package pozostaje dostepny pod \(fallbackPackageURL.lastPathComponent).",
+            category: "Downloader"
+        )
+        return localDistributionURL
     }
 
     private func startAssemblyWithHelper(
