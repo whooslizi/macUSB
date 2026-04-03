@@ -175,6 +175,8 @@ extension MacOSDownloaderWindowShellView {
             return "checklist"
         case .buildingInstaller:
             return "shippingbox.fill"
+        case .copyingInstaller:
+            return "folder.badge.plus"
         case .cleanup:
             return "trash.fill"
         }
@@ -189,7 +191,9 @@ extension MacOSDownloaderWindowShellView {
         case .verifying:
             return "Weryfikowanie plików - \(downloadFlowModel.verifyCurrentIndex)/\(downloadFlowModel.verifyTotal)"
         case .buildingInstaller:
-            return "Użycie pakietu pkg do zbudowania instalatora .app"
+            return "Użycie pakietu .pkg do zbudowania instalatora .app"
+        case .copyingInstaller:
+            return "Przenoszenie instalatora do folderu docelowego"
         case .cleanup:
             return "Czyszczenie plików tymczasowych"
         }
@@ -205,6 +209,8 @@ extension MacOSDownloaderWindowShellView {
             return downloadFlowModel.verifyFileName
         case .buildingInstaller:
             return downloadFlowModel.buildStatusText
+        case .copyingInstaller:
+            return downloadFlowModel.copyStatusText
         case .cleanup:
             return downloadFlowModel.cleanupStatusText
         }
@@ -220,6 +226,8 @@ extension MacOSDownloaderWindowShellView {
             return downloadFlowModel.verifyProgress
         case .buildingInstaller:
             return downloadFlowModel.buildProgress
+        case .copyingInstaller:
+            return downloadFlowModel.copyProgress
         case .cleanup:
             return downloadFlowModel.cleanupProgress
         }
@@ -250,6 +258,10 @@ extension MacOSDownloaderWindowShellView {
 
             ForEach(downloadFlowModel.discoveredDownloadItems) { item in
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Image(systemName: iconForManifestItemStatus(item))
+                        .font(.caption)
+                        .foregroundColor(.accentColor)
+                        .frame(width: 12)
                     Text(item.name)
                         .font(.caption2.monospaced())
                         .lineLimit(1)
@@ -264,5 +276,24 @@ extension MacOSDownloaderWindowShellView {
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .macUSBPanelSurface(.subtle)
+    }
+
+    private func iconForManifestItemStatus(_ item: DownloadManifestItem) -> String {
+        if downloadFlowModel.completedStages.contains(.downloading) {
+            return "checkmark.circle.fill"
+        }
+
+        let currentIndex = downloadFlowModel.downloadCurrentIndex
+        let itemIndex = item.order + 1
+        if downloadFlowModel.currentStage == .downloading {
+            if itemIndex < currentIndex {
+                return "checkmark.circle.fill"
+            }
+            if itemIndex == currentIndex {
+                return "arrow.down.circle.fill"
+            }
+        }
+
+        return "clock.fill"
     }
 }

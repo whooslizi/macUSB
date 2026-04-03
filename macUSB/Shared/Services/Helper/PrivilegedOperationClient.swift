@@ -405,7 +405,10 @@ final class PrivilegedOperationClient: NSObject {
                         workflowID: workflowID,
                         success: false,
                         outputAppPath: nil,
-                        errorMessage: message
+                        errorMessage: message,
+                        cleanupRequested: false,
+                        cleanupSucceeded: false,
+                        cleanupErrorMessage: nil
                     )
                 )
             }

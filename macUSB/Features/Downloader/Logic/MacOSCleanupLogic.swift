@@ -21,13 +21,30 @@ extension MontereyDownloadPlaceholderFlowModel {
             case .cancelled:
                 cleanupStatusText = "Tryb DEBUG: pliki sesji pozostawiono po anulowaniu..."
             }
+            summaryTemporaryFilesText = "Pozostawione w trybie DEBUG"
             cleanupProgress = 1
             completedStages.insert(.cleanup)
             return
         }
 
+        if cleanupDelegatedToHelper {
+            if sessionCleanupHandledByHelper {
+                cleanupStatusText = "Pliki tymczasowe zostały usunięte..."
+                summaryTemporaryFilesText = "Usunięte automatycznie"
+                cleanupProgress = 1
+                completedStages.insert(.cleanup)
+                return
+            }
+            let reason = helperCleanupFailureMessage ?? "Helper nie potwierdził usunięcia plików tymczasowych"
+            AppLogging.error(
+                "Helper cleanup niepotwierdzony, uruchamiam lokalne czyszczenie sesji: \(reason)",
+                category: "Downloader"
+            )
+        }
+
         guard let activeSessionRootURL else {
             cleanupStatusText = "Brak plików tymczasowych do usunięcia..."
+            summaryTemporaryFilesText = "Brak plików tymczasowych"
             cleanupProgress = 1
             completedStages.insert(.cleanup)
             return
@@ -43,7 +60,9 @@ extension MontereyDownloadPlaceholderFlowModel {
             cleanupProgress = 1
             completedStages.insert(.cleanup)
             cleanupStatusText = "Pliki tymczasowe zostały usunięte..."
+            summaryTemporaryFilesText = "Usunięte automatycznie"
         } catch {
+            summaryTemporaryFilesText = "Nie usunięto plików tymczasowych"
             throw DownloadFailureReason.cleanupFailed(error.localizedDescription)
         }
     }
@@ -64,6 +83,7 @@ extension MontereyDownloadPlaceholderFlowModel {
             durationSeconds = 0
         }
         summaryDurationText = formatDuration(durationSeconds)
+        summaryCreatedFileText = finalInstallerAppURL?.lastPathComponent ?? "Nie utworzono instalatora"
     }
 
     func formatDuration(_ seconds: TimeInterval) -> String {

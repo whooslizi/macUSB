@@ -35,6 +35,14 @@ final class DownloaderAssemblyExecutor {
     }
 
     func run() -> DownloaderAssemblyResultPayload {
+        let outputDirectory = URL(fileURLWithPath: request.outputDirectoryPath, isDirectory: true)
+        let sessionRootDirectory = outputDirectory.deletingLastPathComponent()
+        let cleanupRequested = request.cleanupSessionFiles
+
+        var flowSuccess = false
+        var outputAppPath: String?
+        var flowErrorMessage: String?
+
         do {
             try throwIfCancelled()
             emit(percent: 0.02, status: "Przygotowanie etapu budowania .app")
@@ -48,7 +56,6 @@ final class DownloaderAssemblyExecutor {
                 )
             }
 
-            let outputDirectory = URL(fileURLWithPath: request.outputDirectoryPath, isDirectory: true)
             try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
 
             emit(percent: 0.10, status: "Instalacja pakietu InstallAssistant.pkg")
@@ -67,21 +74,48 @@ final class DownloaderAssemblyExecutor {
                 arguments: [assembledAppURL.path, destinationURL.path]
             )
 
+            emit(percent: 0.94, status: "Przenoszenie instalatora do katalogu docelowego")
+            let finalDestinationURL = try moveInstallerToFinalDestination(from: destinationURL)
+
+            if request.cleanupSessionFiles {
+                emit(percent: 0.98, status: "Czyszczenie plików tymczasowych sesji")
+            }
+
             emit(percent: 1.0, status: "Budowanie instalatora .app zakończone")
-            return DownloaderAssemblyResultPayload(
-                workflowID: workflowID,
-                success: true,
-                outputAppPath: destinationURL.path,
-                errorMessage: nil
-            )
+            flowSuccess = true
+            outputAppPath = finalDestinationURL.path
         } catch {
-            let message = (error as NSError).localizedDescription
-            return DownloaderAssemblyResultPayload(
-                workflowID: workflowID,
-                success: false,
-                outputAppPath: nil,
-                errorMessage: message
-            )
+            flowSuccess = false
+            flowErrorMessage = (error as NSError).localizedDescription
         }
+
+        var cleanupSucceeded = false
+        var cleanupErrorMessage: String?
+        if cleanupRequested {
+            do {
+                try cleanupSessionDirectory(sessionRootDirectory)
+                cleanupSucceeded = true
+            } catch {
+                cleanupSucceeded = false
+                cleanupErrorMessage = error.localizedDescription
+            }
+        }
+
+        if flowSuccess && cleanupRequested && !cleanupSucceeded {
+            flowSuccess = false
+            flowErrorMessage = "Czyszczenie plików tymczasowych nie powiodło się: \(cleanupErrorMessage ?? "Nieznany błąd")"
+        } else if !flowSuccess, let cleanupErrorMessage, cleanupRequested {
+            flowErrorMessage = "\(flowErrorMessage ?? "Nieznany błąd"). Dodatkowo cleanup sesji nie powiódł się: \(cleanupErrorMessage)"
+        }
+
+        return DownloaderAssemblyResultPayload(
+            workflowID: workflowID,
+            success: flowSuccess,
+            outputAppPath: outputAppPath,
+            errorMessage: flowErrorMessage,
+            cleanupRequested: cleanupRequested,
+            cleanupSucceeded: cleanupSucceeded,
+            cleanupErrorMessage: cleanupErrorMessage
+        )
     }
 }

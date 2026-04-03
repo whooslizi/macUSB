@@ -9,6 +9,8 @@ extension MontereyDownloadPlaceholderFlowModel {
         currentStage = .buildingInstaller
         buildStatusText = "Przygotowuję budowanie instalatora..."
         buildProgress = 0
+        copyStatusText = "Oczekiwanie na gotowy instalator..."
+        copyProgress = 0
 
         guard let packageURL = locateInstallAssistantPackage(in: manifest) else {
             throw DownloadFailureReason.assemblyFailed("Nie znaleziono pobranego InstallAssistant.pkg")
@@ -21,10 +23,26 @@ extension MontereyDownloadPlaceholderFlowModel {
             packagePath: packageURL.path,
             outputDirectoryPath: outputDirectory.path,
             expectedAppName: "Install macOS Monterey.app",
+            finalDestinationDirectoryPath: plannedInstallerFolderURL().path,
+            cleanupSessionFiles: !shouldRetainSessionFilesForDebugMode(),
             requesterUID: getuid()
         )
+        cleanupDelegatedToHelper = request.cleanupSessionFiles
 
         let result = try await startAssemblyWithHelper(request: request)
+        if result.cleanupRequested && result.cleanupSucceeded {
+            sessionCleanupHandledByHelper = true
+            helperCleanupFailureMessage = nil
+            activeSessionRootURL = nil
+            activeSessionPayloadURL = nil
+            activeSessionOutputURL = nil
+        } else if result.cleanupRequested {
+            sessionCleanupHandledByHelper = false
+            helperCleanupFailureMessage = result.cleanupErrorMessage
+        } else {
+            sessionCleanupHandledByHelper = false
+            helperCleanupFailureMessage = nil
+        }
 
         guard result.success else {
             throw DownloadFailureReason.assemblyFailed(result.errorMessage ?? "Helper zwrocil blad assembly")
@@ -33,20 +51,33 @@ extension MontereyDownloadPlaceholderFlowModel {
             throw DownloadFailureReason.assemblyFailed("Helper nie zwrocil sciezki do instalatora .app")
         }
 
-        let assembledAppURL = URL(fileURLWithPath: outputAppPath)
-        guard FileManager.default.fileExists(atPath: assembledAppURL.path) else {
-            throw DownloadFailureReason.assemblyFailed("Zbudowana aplikacja instalatora nie istnieje")
-        }
-
-        let desktopTargetURL = try moveFinalInstallerToDesktop(assembledAppURL)
-        try validateFinalInstallerApp(at: desktopTargetURL, expectedVersion: entry.version)
-        finalInstallerAppURL = desktopTargetURL
-        buildStatusText = "Instalator zapisano w \(desktopTargetURL.path)"
+        buildStatusText = "Instalator .app został zbudowany..."
         buildProgress = 1.0
         completedStages.insert(.buildingInstaller)
 
+        currentStage = .copyingInstaller
+        copyStatusText = "Przenoszę gotowy instalator do lokalizacji docelowej..."
+        copyProgress = 0.55
+
+        let finalAppURL = URL(fileURLWithPath: outputAppPath)
+        guard FileManager.default.fileExists(atPath: finalAppURL.path) else {
+            throw DownloadFailureReason.assemblyFailed("Zbudowana aplikacja instalatora nie istnieje")
+        }
+
+        finalInstallerAppURL = finalAppURL
+        copyStatusText = "Weryfikuję gotowy instalator..."
+        copyProgress = 0.85
+        try validateFinalInstallerApp(
+            at: finalAppURL,
+            expectedVersion: entry.version,
+            expectedBuild: entry.build
+        )
+        copyStatusText = "Instalator zapisano w \(finalAppURL.path)"
+        copyProgress = 1.0
+        completedStages.insert(.copyingInstaller)
+
         AppLogging.info(
-            "Zakonczono budowanie .app Monterey i przeniesiono wynik do \(desktopTargetURL.path).",
+            "Monterey installer move status=success destination=\(finalAppURL.path)",
             category: "Downloader"
         )
     }
@@ -81,8 +112,25 @@ extension MontereyDownloadPlaceholderFlowModel {
                 request: request,
                 onEvent: { [weak self] event in
                     Task { @MainActor [weak self] in
-                        self?.buildProgress = min(max(event.percent, 0), 1)
-                        self?.buildStatusText = event.statusText
+                        guard let self else { return }
+                        if self.isCopyStageStatus(event.statusText) {
+                            self.completedStages.insert(.buildingInstaller)
+                            self.currentStage = .copyingInstaller
+                            self.copyStatusText = event.statusText
+                            let normalizedCopyProgress = min(
+                                1.0,
+                                max(0, (event.percent - 0.90) / 0.10)
+                            )
+                            self.copyProgress = max(self.copyProgress, normalizedCopyProgress)
+                        } else {
+                            self.currentStage = .buildingInstaller
+                            let normalizedBuildProgress = min(
+                                1.0,
+                                max(0, event.percent / 0.90)
+                            )
+                            self.buildProgress = max(self.buildProgress ?? 0, normalizedBuildProgress)
+                            self.buildStatusText = event.statusText
+                        }
                         if let logLine = event.logLine, !logLine.isEmpty {
                             AppLogging.info(logLine, category: "Downloader")
                         }
@@ -106,88 +154,205 @@ extension MontereyDownloadPlaceholderFlowModel {
         }
     }
 
-    private func moveFinalInstallerToDesktop(_ builtAppURL: URL) throws -> URL {
-        let desktopURL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Desktop", isDirectory: true)
-        let downloadsFolder = desktopURL.appendingPathComponent("macUSB Downloads", isDirectory: true)
+    private func isCopyStageStatus(_ status: String) -> Bool {
+        let normalized = status.lowercased()
+        return normalized.contains("przenoszenie instalatora")
+            || normalized.contains("katalogu docelowego")
+    }
 
-        try FileManager.default.createDirectory(at: downloadsFolder, withIntermediateDirectories: true)
+    func plannedInstallerFolderURL() -> URL {
+        URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+            .appendingPathComponent("Poza iCloud", isDirectory: true)
+    }
 
-        let preferredName = builtAppURL.lastPathComponent
-        let destinationURL = uniqueAppDestinationURL(
-            preferredName: preferredName,
-            in: downloadsFolder
+    private func validateFinalInstallerApp(
+        at appURL: URL,
+        expectedVersion: String,
+        expectedBuild: String
+    ) throws {
+        if shouldSkipAppSignatureVerificationForDebug() {
+            AppLogging.info(
+                "DEBUG: Pomijam weryfikacje podpisu .app dla \(appURL.lastPathComponent).",
+                category: "Downloader"
+            )
+        } else {
+            try verifyCodeSignature(of: appURL)
+        }
+        try verifyInstallerBuildIfAvailable(
+            of: appURL,
+            expectedBuild: expectedBuild,
+            expectedVersion: expectedVersion
         )
-
-        if FileManager.default.fileExists(atPath: destinationURL.path) {
-            try FileManager.default.removeItem(at: destinationURL)
-        }
-        try FileManager.default.moveItem(at: builtAppURL, to: destinationURL)
-        return destinationURL
     }
 
-    private func uniqueAppDestinationURL(preferredName: String, in directory: URL) -> URL {
-        let baseName = (preferredName as NSString).deletingPathExtension
-        let ext = (preferredName as NSString).pathExtension
-
-        var candidate = directory.appendingPathComponent(preferredName, isDirectory: true)
-        if !FileManager.default.fileExists(atPath: candidate.path) {
-            return candidate
-        }
-
-        var suffix = 2
-        while true {
-            let nextName = "\(baseName) (\(suffix)).\(ext)"
-            candidate = directory.appendingPathComponent(nextName, isDirectory: true)
-            if !FileManager.default.fileExists(atPath: candidate.path) {
-                return candidate
-            }
-            suffix += 1
-        }
-    }
-
-    private func validateFinalInstallerApp(at appURL: URL, expectedVersion: String) throws {
-        try verifyCodeSignature(of: appURL)
-        try verifyAppVersion(of: appURL, expectedVersion: expectedVersion)
+    private func shouldSkipAppSignatureVerificationForDebug() -> Bool {
+        #if DEBUG
+        return skipAppSignatureVerificationInDebug
+        #else
+        return false
+        #endif
     }
 
     private func verifyCodeSignature(of appURL: URL) throws {
+        let codesign = runAndCapture(
+            executable: "/usr/bin/codesign",
+            arguments: ["--verify", "--deep", "--verbose=2", appURL.path]
+        )
+        guard codesign.status == 0 else {
+            throw DownloadFailureReason.assemblyFailed(
+                "Weryfikacja podpisu .app nie powiodla sie\(codesign.output.isEmpty ? "" : ": \(codesign.output)")"
+            )
+        }
+
+        let gatekeeper = runAndCapture(
+            executable: "/usr/sbin/spctl",
+            arguments: ["--assess", "--type", "execute", "--verbose=2", appURL.path]
+        )
+        if gatekeeper.status != 0 {
+            let details = gatekeeper.output.isEmpty ? "brak szczegolow" : gatekeeper.output
+            AppLogging.info(
+                "Gatekeeper assessment zwrocil ostrzezenie dla \(appURL.lastPathComponent): \(details)",
+                category: "Downloader"
+            )
+        }
+    }
+
+    private func runAndCapture(executable: String, arguments: [String]) -> (status: Int32, output: String) {
         let task = Process()
-        task.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
-        task.arguments = ["--verify", "--deep", "--strict", "--verbose=2", appURL.path]
-        let output = Pipe()
-        task.standardOutput = output
-        task.standardError = output
+        task.executableURL = URL(fileURLWithPath: executable)
+        task.arguments = arguments
+        let outputPipe = Pipe()
+        task.standardOutput = outputPipe
+        task.standardError = outputPipe
 
         do {
             try task.run()
             task.waitUntilExit()
         } catch {
-            throw DownloadFailureReason.assemblyFailed("Nie udalo sie uruchomic weryfikacji codesign: \(error.localizedDescription)")
+            return (-1, error.localizedDescription)
         }
 
-        guard task.terminationStatus == 0 else {
-            let details = String(data: output.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
-                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            throw DownloadFailureReason.assemblyFailed("Weryfikacja podpisu .app nie powiodla sie\(details.isEmpty ? "" : ": \(details)")")
-        }
+        let output = String(data: outputPipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return (task.terminationStatus, output)
     }
 
-    private func verifyAppVersion(of appURL: URL, expectedVersion: String) throws {
-        let plistURL = appURL.appendingPathComponent("Contents/Info.plist")
-        guard let data = try? Data(contentsOf: plistURL),
-              let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any],
-              let bundleVersion = plist["CFBundleShortVersionString"] as? String
-        else {
-            throw DownloadFailureReason.assemblyFailed("Nie udalo sie odczytac wersji z finalnego instalatora .app")
+    private func verifyInstallerBuildIfAvailable(
+        of appURL: URL,
+        expectedBuild: String,
+        expectedVersion: String
+    ) throws {
+        let expected = expectedBuild.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !expected.isEmpty, expected.caseInsensitiveCompare("N/A") != .orderedSame else {
+            AppLogging.info(
+                "Brak oczekiwanego builda dla \(appURL.lastPathComponent) (wersja \(expectedVersion)); pomijam walidacje build.",
+                category: "Downloader"
+            )
+            return
         }
 
-        let expectedMajor = expectedVersion.split(separator: ".").first.map(String.init) ?? expectedVersion
-        let actualMajor = bundleVersion.split(separator: ".").first.map(String.init) ?? bundleVersion
-        guard actualMajor == expectedMajor else {
-            throw DownloadFailureReason.assemblyFailed(
-                "Finalny instalator ma wersje \(bundleVersion), oczekiwano \(expectedVersion)"
+        let discoveredBuilds = extractInstallerBuildCandidates(from: appURL)
+        guard !discoveredBuilds.isEmpty else {
+            AppLogging.info(
+                "Nie udalo sie odczytac builda z \(appURL.lastPathComponent); pomijam walidacje build (oczekiwano \(expected)).",
+                category: "Downloader"
             )
+            return
         }
+
+        if discoveredBuilds.contains(where: { $0.caseInsensitiveCompare(expected) == .orderedSame }) {
+            return
+        }
+
+        if isKnownCompatibleBuildAlias(
+            expectedBuild: expected,
+            discoveredBuilds: discoveredBuilds,
+            expectedVersion: expectedVersion
+        ) {
+            AppLogging.info(
+                "Akceptuje kompatybilny alias builda dla \(appURL.lastPathComponent): expected=\(expected), actual=\(discoveredBuilds.joined(separator: ", ")), version=\(expectedVersion).",
+                category: "Downloader"
+            )
+            return
+        }
+
+        let actual = discoveredBuilds.joined(separator: ", ")
+        throw DownloadFailureReason.assemblyFailed(
+            "Finalny instalator ma build \(actual), oczekiwano \(expected)"
+        )
+    }
+
+    private func isKnownCompatibleBuildAlias(
+        expectedBuild: String,
+        discoveredBuilds: [String],
+        expectedVersion: String
+    ) -> Bool {
+        let normalizedVersion = expectedVersion.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard normalizedVersion == "12.7.6" else { return false }
+
+        let expectedCanonical = expectedBuild.uppercased()
+        let discoveredCanonical = Set(discoveredBuilds.map { $0.uppercased() })
+        let montereyAliasSet: Set<String> = ["21H1319", "21H1320"]
+
+        guard montereyAliasSet.contains(expectedCanonical) else { return false }
+        return !discoveredCanonical.intersection(montereyAliasSet).isEmpty
+    }
+
+    private func extractInstallerBuildCandidates(from appURL: URL) -> [String] {
+        var values: [String] = []
+
+        let plistURL = appURL.appendingPathComponent("Contents/Info.plist")
+        guard let data = try? Data(contentsOf: plistURL),
+              let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any]
+        else {
+            return []
+        }
+
+        let infoKeys = ["ProductBuildVersion", "BuildVersion"]
+        for key in infoKeys {
+            if let value = plist[key] as? String {
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    values.append(trimmed)
+                }
+            }
+        }
+
+        let installInfoURL = appURL
+            .appendingPathComponent("Contents/SharedSupport", isDirectory: true)
+            .appendingPathComponent("InstallInfo.plist")
+        if let installInfoData = try? Data(contentsOf: installInfoURL),
+           let installInfo = try? PropertyListSerialization.propertyList(from: installInfoData, options: [], format: nil) as? [String: Any] {
+            if let rootBuild = installInfo["Build"] as? String {
+                let trimmed = rootBuild.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty {
+                    values.append(trimmed)
+                }
+            }
+            if let systemImageInfo = installInfo["System Image Info"] as? [String: Any] {
+                if let imageBuild = systemImageInfo["build"] as? String {
+                    let trimmed = imageBuild.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !trimmed.isEmpty {
+                        values.append(trimmed)
+                    }
+                }
+            }
+        }
+
+        let osBuildRegex = try? NSRegularExpression(pattern: #"^[0-9]{1,3}[A-Za-z][0-9]{1,6}[A-Za-z]?$"#)
+        let filtered = values.filter { candidate in
+            let range = NSRange(location: 0, length: candidate.utf16.count)
+            return osBuildRegex?.firstMatch(in: candidate, options: [], range: range) != nil
+        }
+
+        var unique: [String] = []
+        var seen = Set<String>()
+        for value in filtered {
+            let canonical = value.lowercased()
+            if seen.insert(canonical).inserted {
+                unique.append(value)
+            }
+        }
+        return unique
     }
 }

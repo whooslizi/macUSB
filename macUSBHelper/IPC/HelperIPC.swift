@@ -47,6 +47,8 @@ struct DownloaderAssemblyRequestPayload: Codable {
     let packagePath: String
     let outputDirectoryPath: String
     let expectedAppName: String
+    let finalDestinationDirectoryPath: String
+    let cleanupSessionFiles: Bool
     let requesterUID: UInt32
 }
 
@@ -62,6 +64,9 @@ struct DownloaderAssemblyResultPayload: Codable {
     let success: Bool
     let outputAppPath: String?
     let errorMessage: String?
+    let cleanupRequested: Bool
+    let cleanupSucceeded: Bool
+    let cleanupErrorMessage: String?
 }
 
 @objc(MacUSBPrivilegedHelperToolXPCProtocol)

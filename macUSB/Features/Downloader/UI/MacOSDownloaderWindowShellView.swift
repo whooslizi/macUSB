@@ -58,7 +58,8 @@ struct MacOSDownloaderWindowShellView: View {
         .sheet(isPresented: $isOptionsPresented) {
             MacOSDownloaderOptionsSheetView(
                 showAllAvailableVersions: $showAllAvailableVersions,
-                preserveDownloadedFilesInDebug: $downloadFlowModel.preserveDownloadedFilesInDebug
+                preserveDownloadedFilesInDebug: $downloadFlowModel.preserveDownloadedFilesInDebug,
+                skipAppSignatureVerificationInDebug: $downloadFlowModel.skipAppSignatureVerificationInDebug
             )
         }
         .task {
@@ -71,7 +72,10 @@ struct MacOSDownloaderWindowShellView: View {
             ensureSelectedEntryIsVisible()
         }
         .onChange(of: downloadFlowModel.isFinished) {
-            guard downloadFlowModel.isFinished, let activeDownloadEntry else { return }
+            guard downloadFlowModel.isFinished,
+                  downloadFlowModel.workflowState == .completed,
+                  let activeDownloadEntry
+            else { return }
             sendDownloadCompletionNotificationIfInactive(for: activeDownloadEntry)
         }
         .onDisappear {
@@ -207,6 +211,7 @@ struct MacOSDownloaderWindowShellView: View {
 private struct MacOSDownloaderOptionsSheetView: View {
     @Binding var showAllAvailableVersions: Bool
     @Binding var preserveDownloadedFilesInDebug: Bool
+    @Binding var skipAppSignatureVerificationInDebug: Bool
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -218,7 +223,16 @@ private struct MacOSDownloaderOptionsSheetView: View {
                 .toggleStyle(.checkbox)
 
             #if DEBUG
+            Divider()
+                .padding(.vertical, 2)
+
+            Text("DEBUG")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+
             Toggle("DEBUG: Nie usuwaj pobranych plików", isOn: $preserveDownloadedFilesInDebug)
+                .toggleStyle(.checkbox)
+            Toggle("DEBUG: Pomiń weryfikację podpisu .app", isOn: $skipAppSignatureVerificationInDebug)
                 .toggleStyle(.checkbox)
             #endif
 
@@ -237,6 +251,6 @@ private struct MacOSDownloaderOptionsSheetView: View {
             }
         }
         .padding(18)
-        .frame(width: 420, height: 210)
+        .frame(width: 420, height: 240)
     }
 }

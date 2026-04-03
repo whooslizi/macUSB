@@ -12,6 +12,7 @@ enum MontereyDownloadPlaceholderFlowStage: Int, CaseIterable {
     case downloading
     case verifying
     case buildingInstaller
+    case copyingInstaller
     case cleanup
 }
 
@@ -90,6 +91,7 @@ final class MontereyDownloadPlaceholderFlowModel: ObservableObject {
     @Published var isFinished: Bool = false
     @Published var workflowState: DownloadSessionState = .idle
     @Published var failureMessage: String?
+    @Published var isPartialSuccess: Bool = false
 
     @Published var connectionStatusText: String = "Weryfikuję połączenie z serwerami Apple..."
     @Published var downloadCurrentIndex: Int = 0
@@ -104,14 +106,19 @@ final class MontereyDownloadPlaceholderFlowModel: ObservableObject {
     @Published var verifyProgress: Double = 0
     @Published var buildStatusText: String = "Przygotowywanie środowiska budowania..."
     @Published var buildProgress: Double? = nil
+    @Published var copyStatusText: String = "Przygotowanie kopiowania instalatora..."
+    @Published var copyProgress: Double = 0
     @Published var cleanupStatusText: String = "Przygotowanie czyszczenia..."
     @Published var cleanupProgress: Double = 0
     @Published var summaryTotalDownloadedText: String = "0.0 GB"
     @Published var summaryAverageSpeedText: String = "0.0 MB/s"
     @Published var summaryDurationText: String = "00m 00s"
+    @Published var summaryTemporaryFilesText: String = "Brak danych"
+    @Published var summaryCreatedFileText: String = "Brak danych"
     @Published var discoveredDownloadItems: [DownloadManifestItem] = []
 
     @Published var preserveDownloadedFilesInDebug: Bool = false
+    @Published var skipAppSignatureVerificationInDebug: Bool = false
 
     var workflowTask: Task<Void, Never>?
     var processStartedAt: Date?
@@ -124,6 +131,9 @@ final class MontereyDownloadPlaceholderFlowModel: ObservableObject {
     var activeSessionRootURL: URL?
     var activeSessionPayloadURL: URL?
     var activeSessionOutputURL: URL?
+    var cleanupDelegatedToHelper: Bool = false
+    var sessionCleanupHandledByHelper: Bool = false
+    var helperCleanupFailureMessage: String?
     var downloadedFileURLsByItemID: [String: URL] = [:]
     var finalInstallerAppURL: URL?
 
@@ -175,6 +185,7 @@ final class MontereyDownloadPlaceholderFlowModel: ObservableObject {
         isFinished = false
         workflowState = .idle
         failureMessage = nil
+        isPartialSuccess = false
 
         connectionStatusText = "Weryfikuję połączenie z serwerami Apple..."
         downloadCurrentIndex = 0
@@ -189,11 +200,15 @@ final class MontereyDownloadPlaceholderFlowModel: ObservableObject {
         verifyProgress = 0
         buildStatusText = "Przygotowywanie środowiska budowania..."
         buildProgress = nil
+        copyStatusText = "Przygotowanie kopiowania instalatora..."
+        copyProgress = 0
         cleanupStatusText = "Przygotowanie czyszczenia..."
         cleanupProgress = 0
         summaryTotalDownloadedText = "0.0 GB"
         summaryAverageSpeedText = "0.0 MB/s"
         summaryDurationText = "00m 00s"
+        summaryTemporaryFilesText = "Brak danych"
+        summaryCreatedFileText = "Brak danych"
         discoveredDownloadItems = []
 
         processStartedAt = Date()
@@ -205,6 +220,9 @@ final class MontereyDownloadPlaceholderFlowModel: ObservableObject {
         activeSessionRootURL = nil
         activeSessionPayloadURL = nil
         activeSessionOutputURL = nil
+        cleanupDelegatedToHelper = false
+        sessionCleanupHandledByHelper = false
+        helperCleanupFailureMessage = nil
         downloadedFileURLsByItemID = [:]
         finalInstallerAppURL = nil
     }
@@ -241,7 +259,7 @@ final class MontereyDownloadPlaceholderFlowModel: ObservableObject {
             }
         } catch {
             let technicalMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-            failureMessage = technicalMessage
+            failureMessage = userFacingFailureMessage(for: technicalMessage)
             workflowState = .failed
 
             AppLogging.error(
@@ -258,8 +276,30 @@ final class MontereyDownloadPlaceholderFlowModel: ObservableObject {
                 )
             }
 
+            isPartialSuccess = (finalInstallerAppURL != nil) && completedStages.contains(.cleanup)
+            updateSummaryMetrics()
             playCompletionSound(success: false)
+            isFinished = true
         }
+    }
+
+    private func userFacingFailureMessage(for technicalMessage: String) -> String {
+        if isMovePermissionFailure(technicalMessage) {
+            return "Nie udało się przenieść instalatora do folderu docelowego z powodu braku uprawnień. Sprawdź uprawnienia wybranego folderu i spróbuj ponownie. Szczegóły techniczne znajdziesz w logach"
+        }
+        return technicalMessage
+    }
+
+    private func isMovePermissionFailure(_ message: String) -> Bool {
+        let normalized = message.lowercased()
+        let moveFailure =
+            normalized.contains("nie można przenieść")
+            || (normalized.contains("cannot") && normalized.contains("move"))
+        let permissionFailure =
+            normalized.contains("nie masz praw dostępu")
+            || normalized.contains("permission")
+            || normalized.contains("access")
+        return moveFailure && permissionFailure
     }
 
     func runConnectionCheck(

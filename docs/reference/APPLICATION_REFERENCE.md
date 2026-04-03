@@ -71,7 +71,7 @@ Update this section when startup permission order, permission prompts, or permis
 - Entering the downloader sheet triggers on-demand discovery (not app startup discovery) of officially available macOS/OS X installers from Apple endpoints.
 - During discovery, downloader keeps the systems-list header visible and shows an inline progress panel (in the list area) with cancel action; options stay visible but disabled until scanning completes, then the panel transitions out and grouped installer entries are shown.
 - Production download flow is currently enabled for selected `macOS Monterey` entries: preflight fetches real package manifest and sizes, then downloader runs sequential download, verification, helper-based `.app` assembly, and summary.
-- Download artifacts are staged in `macUSB_temp/downloads/<session_id>` and final installer is moved to `~/Desktop/macUSB Downloads` with collision suffixing (`(2)`, `(3)`, ...).
+- Download artifacts are staged in `macUSB_temp/downloads/<session_id>` and final installer is moved to `~/Poza iCloud` with collision suffixing (`(2)`, `(3)`, ...).
 - In `DEBUG` builds, downloader options include `DEBUG: Nie usuwaj pobranych plikow`; when enabled, session files are retained after success/failure/cancel until application shutdown cleanup.
 - Application termination performs final cleanup of `macUSB_temp` to avoid leaving temporary downloader artifacts across sessions.
 

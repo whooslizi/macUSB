@@ -37,6 +37,7 @@ extension MontereyDownloadPlaceholderFlowModel {
             let signatureVerified = isPackage ? verifyPackageSignatureIfPossible(for: localURL) : false
 
             if try await verifyIntegrityDataChunklistIfAvailable(for: localURL, item: item) {
+                try logSHA256VerificationDetails(for: localURL, item: item)
                 verifiedCount += 1
                 verifyProgress = min(1.0, Double(verifiedCount) / totalCount)
                 continue
@@ -64,6 +65,8 @@ extension MontereyDownloadPlaceholderFlowModel {
                     )
                 }
             }
+
+            try logSHA256VerificationDetails(for: localURL, item: item)
 
             verifiedCount += 1
             verifyProgress = min(1.0, Double(verifiedCount) / totalCount)
@@ -401,5 +404,34 @@ extension MontereyDownloadPlaceholderFlowModel {
             return trimmed
         }
         return "\(trimmed.prefix(8))...\(trimmed.suffix(8))"
+    }
+
+    private func logSHA256VerificationDetails(for fileURL: URL, item: DownloadManifestItem) throws {
+        let actualSHA256 = try computeFileDigestHex(for: fileURL, algorithm: .sha256)
+        let expectedSHA256 = expectedSHA256FromManifest(for: item) ?? "N/A"
+        AppLogging.info(
+            "SHA-256 verify \(item.name): expected=\(expectedSHA256), actual=\(actualSHA256)",
+            category: "Downloader"
+        )
+    }
+
+    private func expectedSHA256FromManifest(for item: DownloadManifestItem) -> String? {
+        guard let expectedDigestRaw = item.expectedDigest?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !expectedDigestRaw.isEmpty
+        else {
+            return nil
+        }
+
+        let normalizedHex = normalizeExpectedDigestToHex(expectedDigestRaw)
+        let algorithm = resolvedDigestAlgorithm(
+            explicitAlgorithm: item.digestAlgorithm,
+            rawDigest: expectedDigestRaw,
+            normalizedHexDigest: normalizedHex
+        )
+        guard algorithm == .sha256 else {
+            return nil
+        }
+
+        return normalizedHex.lowercased()
     }
 }

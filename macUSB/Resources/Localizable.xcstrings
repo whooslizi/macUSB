@@ -12118,6 +12118,12 @@
     "Pobieranie zakończone" : {
 
     },
+    "Pobieranie zakończone błędem" : {
+
+    },
+    "Pobieranie zakończone częściowo" : {
+
+    },
     "Pobierz" : {
       "localizations" : {
         "de" : {
@@ -15585,6 +15591,9 @@
     "Status jest aktualizowany na bieżąco" : {
 
     },
+    "Status procesu" : {
+
+    },
     "Status usługi: %@" : {
       "localizations" : {
         "de" : {
@@ -15897,6 +15906,9 @@
           }
         }
       }
+    },
+    "Szczegóły błędu" : {
+
     },
     "Szczegóły operacji" : {
       "localizations" : {
