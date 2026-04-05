@@ -4,7 +4,7 @@ This document is a dedicated runtime and maintenance reference for the privilege
 
 It is intentionally split from other docs:
 - Process, commit, and release workflow rules are defined in `docs/AGENTS.md`.
-- Global app runtime contract is defined in `docs/reference/APPLICATION_REFERENCE.md`.
+- Global runtime documentation map is in `docs/reference/README.md`.
 - This file focuses only on helper architecture, behavior, and safe change practices.
 
 ## Table of Contents
@@ -45,7 +45,7 @@ Out of scope:
 ## 2. Quick Rules for Agents
 
 - Read `docs/AGENTS.md` before any helper modification.
-- Read helper sections in `docs/reference/APPLICATION_REFERENCE.md` before changing behavior.
+- Read helper-adjacent runtime files from `docs/reference/README.md` before changing behavior.
 - Keep helper behavior and IPC semantics stable unless explicitly requested by the user.
 - Treat helper and helper-related file operations as high-risk areas.
 - Verify cross-feature safety after every helper change.
@@ -253,7 +253,7 @@ Diagnostics should allow answering:
 - [ ] USB workflow logic unchanged when editing downloader/helper behavior.
 
 ### Documentation Checklist
-- [ ] `docs/reference/APPLICATION_REFERENCE.md` remains consistent with helper runtime behavior.
+- [ ] `docs/reference/README.md` and helper-related runtime docs remain consistent with helper behavior.
 - [ ] Stage keys, status keys, and IPC names in docs match code.
 - [ ] This `HELPER.md` file reflects current helper structure and flows.
 

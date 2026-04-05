@@ -248,8 +248,18 @@ extension MontereyDownloadFlowModel {
         )
         recoveryMounted = false
 
-        let destinationURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
-            .appendingPathComponent(expectedInstallerAppName(for: entry), isDirectory: true)
+        let applicationsURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
+        let preferredName = expectedInstallerAppName(for: entry)
+        let destinationURL = uniqueCollisionSafeURL(
+            in: applicationsURL,
+            preferredFileName: preferredName
+        )
+        if destinationURL.lastPathComponent != preferredName {
+            AppLogging.info(
+                "Legacy assembly: wykryto kolizje nazwy w /Applications, używam \(destinationURL.lastPathComponent)",
+                category: "Downloader"
+            )
+        }
         try await runLegacyFileStepWithProgress(
             statusText: "Przenoszę gotowy instalator do /Applications...",
             progressStart: 0.80,
@@ -515,7 +525,14 @@ extension MontereyDownloadFlowModel {
             return
         }
 
-        let discoveredBuilds = extractInstallerBuildCandidates(from: appURL)
+        var discoveredBuilds = extractInstallerBuildCandidates(from: appURL)
+        if discoveredBuilds.isEmpty, let legacyBuild = try extractLegacyBuildFromInstallESDIfAvailable(appURL: appURL) {
+            discoveredBuilds = [legacyBuild]
+            AppLogging.info(
+                "Odczytano build legacy z InstallESD.dmg dla \(appURL.lastPathComponent): \(legacyBuild)",
+                category: "Downloader"
+            )
+        }
         guard !discoveredBuilds.isEmpty else {
             AppLogging.info(
                 "Nie udalo sie odczytac builda z \(appURL.lastPathComponent); pomijam walidacje build (oczekiwano \(expected)).",
@@ -618,6 +635,112 @@ extension MontereyDownloadFlowModel {
             }
         }
         return unique
+    }
+
+    private func extractLegacyBuildFromInstallESDIfAvailable(appURL: URL) throws -> String? {
+        let installESDURL = appURL
+            .appendingPathComponent("Contents/SharedSupport", isDirectory: true)
+            .appendingPathComponent("InstallESD.dmg")
+        guard FileManager.default.fileExists(atPath: installESDURL.path) else {
+            return nil
+        }
+
+        let tempRoot = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        let esdMountURL = tempRoot.appendingPathComponent("macusb_esd_\(UUID().uuidString)", isDirectory: true)
+        let baseMountURL = tempRoot.appendingPathComponent("macusb_base_\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: esdMountURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: baseMountURL, withIntermediateDirectories: true)
+
+        var esdMounted = false
+        var baseMounted = false
+        defer {
+            if baseMounted {
+                _ = try? runProcessAndCaptureOutput(
+                    executable: "/usr/bin/hdiutil",
+                    arguments: ["detach", baseMountURL.path, "-force"]
+                )
+            }
+            if esdMounted {
+                _ = try? runProcessAndCaptureOutput(
+                    executable: "/usr/bin/hdiutil",
+                    arguments: ["detach", esdMountURL.path, "-force"]
+                )
+            }
+            try? FileManager.default.removeItem(at: baseMountURL)
+            try? FileManager.default.removeItem(at: esdMountURL)
+        }
+
+        _ = try runProcessAndCaptureOutput(
+            executable: "/usr/bin/hdiutil",
+            arguments: ["attach", "-readonly", "-nobrowse", installESDURL.path, "-mountpoint", esdMountURL.path]
+        )
+        esdMounted = true
+
+        let directSystemVersionURL = esdMountURL
+            .appendingPathComponent("System/Library/CoreServices/SystemVersion.plist")
+        if let build = readBuildFromSystemVersionPlist(at: directSystemVersionURL) {
+            return build
+        }
+
+        let baseCandidates = [
+            esdMountURL.appendingPathComponent("BaseSystem.dmg"),
+            esdMountURL.appendingPathComponent("BaseSystem/BaseSystem.dmg")
+        ]
+        guard let baseSystemURL = baseCandidates.first(where: { FileManager.default.fileExists(atPath: $0.path) }) else {
+            return nil
+        }
+
+        _ = try runProcessAndCaptureOutput(
+            executable: "/usr/bin/hdiutil",
+            arguments: ["attach", "-readonly", "-nobrowse", baseSystemURL.path, "-mountpoint", baseMountURL.path]
+        )
+        baseMounted = true
+
+        let baseSystemVersionURL = baseMountURL
+            .appendingPathComponent("System/Library/CoreServices/SystemVersion.plist")
+        return readBuildFromSystemVersionPlist(at: baseSystemVersionURL)
+    }
+
+    private func readBuildFromSystemVersionPlist(at plistURL: URL) -> String? {
+        guard FileManager.default.fileExists(atPath: plistURL.path),
+              let data = try? Data(contentsOf: plistURL),
+              let plist = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any],
+              let build = plist["ProductBuildVersion"] as? String
+        else {
+            return nil
+        }
+
+        let trimmed = build.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func uniqueCollisionSafeURL(
+        in directoryURL: URL,
+        preferredFileName: String
+    ) -> URL {
+        let preferredURL = directoryURL.appendingPathComponent(preferredFileName, isDirectory: true)
+        guard FileManager.default.fileExists(atPath: preferredURL.path) else {
+            return preferredURL
+        }
+
+        let nsName = preferredFileName as NSString
+        let baseName = nsName.deletingPathExtension
+        let ext = nsName.pathExtension
+
+        var index = 2
+        while true {
+            let candidateName: String
+            if ext.isEmpty {
+                candidateName = "\(baseName) (\(index))"
+            } else {
+                candidateName = "\(baseName) (\(index)).\(ext)"
+            }
+            let candidateURL = directoryURL.appendingPathComponent(candidateName, isDirectory: true)
+            if !FileManager.default.fileExists(atPath: candidateURL.path) {
+                return candidateURL
+            }
+            index += 1
+        }
     }
 
     @discardableResult

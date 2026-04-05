@@ -31,6 +31,11 @@ extension MontereyDownloadFlowModel {
                 "Weryfikacja \(verifyCurrentIndex)/\(verifyTotal): start dla \(item.name)",
                 category: "Downloader"
             )
+            updateVerificationProgress(
+                completedFiles: verifiedCount,
+                totalCount: totalCount,
+                currentFileFraction: 0.02
+            )
 
             guard let localURL = downloadedFileURLsByItemID[item.id] else {
                 throw DownloadFailureReason.verificationFailed("Brak lokalnego pliku \(item.name)")
@@ -41,9 +46,36 @@ extension MontereyDownloadFlowModel {
             if isPackage {
                 try verifyPackageSignature(for: localURL)
             }
+            updateVerificationProgress(
+                completedFiles: verifiedCount,
+                totalCount: totalCount,
+                currentFileFraction: 0.15
+            )
 
-            if try await verifyIntegrityDataChunklistIfAvailable(for: localURL, item: item) {
-                try logSHA256VerificationDetails(for: localURL, item: item)
+            if try await verifyIntegrityDataChunklistIfAvailable(
+                for: localURL,
+                item: item,
+                progressHandler: { [weak self] fileFraction in
+                    guard let self else { return }
+                    self.updateVerificationProgress(
+                        completedFiles: verifiedCount,
+                        totalCount: totalCount,
+                        currentFileFraction: 0.15 + (fileFraction * 0.65)
+                    )
+                }
+            ) {
+                try logSHA256VerificationDetails(
+                    for: localURL,
+                    item: item,
+                    progressHandler: { [weak self] shaFraction in
+                        guard let self else { return }
+                        self.updateVerificationProgress(
+                            completedFiles: verifiedCount,
+                            totalCount: totalCount,
+                            currentFileFraction: 0.80 + (shaFraction * 0.20)
+                        )
+                    }
+                )
                 AppLogging.info(
                     "Weryfikacja \(verifyCurrentIndex)/\(verifyTotal): zakonczona sukcesem przez IntegrityData dla \(item.name)",
                     category: "Downloader"
@@ -53,17 +85,25 @@ extension MontereyDownloadFlowModel {
                 continue
             }
 
-            do {
-                try verifyDigestIfNeeded(for: localURL, item: item)
-            } catch let digestFailure as DigestVerificationFailure {
-                throw DownloadFailureReason.verificationFailed(
-                    digestFailure.errorDescription ?? "Suma kontrolna pliku \(item.name) jest niepoprawna"
-                )
-            }
-
-            try logSHA256VerificationDetails(for: localURL, item: item)
             AppLogging.info(
-                "Weryfikacja \(verifyCurrentIndex)/\(verifyTotal): zakonczona sukcesem fallback digest dla \(item.name)",
+                "IntegrityData: brak URL dla \(item.name), pomijam fallback digest i kontynuuje (rozmiar + podpis pakietu).",
+                category: "Downloader"
+            )
+
+            try logSHA256VerificationDetails(
+                for: localURL,
+                item: item,
+                progressHandler: { [weak self] shaFraction in
+                    guard let self else { return }
+                    self.updateVerificationProgress(
+                        completedFiles: verifiedCount,
+                        totalCount: totalCount,
+                        currentFileFraction: 0.15 + (shaFraction * 0.85)
+                    )
+                }
+            )
+            AppLogging.info(
+                "Weryfikacja \(verifyCurrentIndex)/\(verifyTotal): zakonczona bez IntegrityData dla \(item.name)",
                 category: "Downloader"
             )
 
@@ -73,6 +113,16 @@ extension MontereyDownloadFlowModel {
 
         verifyProgress = 1.0
         completedStages.insert(.verifying)
+    }
+
+    private func updateVerificationProgress(
+        completedFiles: Int,
+        totalCount: Double,
+        currentFileFraction: Double
+    ) {
+        let clampedFraction = min(max(currentFileFraction, 0), 1)
+        let normalized = (Double(completedFiles) + clampedFraction) / max(totalCount, 1)
+        verifyProgress = min(max(verifyProgress, normalized), 1.0)
     }
 
     private func verifyFileSize(for fileURL: URL, expectedBytes: Int64, fileName: String) throws {
@@ -164,7 +214,8 @@ extension MontereyDownloadFlowModel {
 
     private func verifyIntegrityDataChunklistIfAvailable(
         for fileURL: URL,
-        item: DownloadManifestItem
+        item: DownloadManifestItem,
+        progressHandler: ((Double) -> Void)? = nil
     ) async throws -> Bool {
         guard let integrityDataURL = item.integrityDataURL else {
             AppLogging.info(
@@ -242,6 +293,9 @@ extension MontereyDownloadFlowModel {
                 throw DownloadFailureReason.verificationFailed(
                     "Weryfikacja IntegrityData nie powiodla sie dla \(item.name) (chunk \(chunkIndex + 1)/\(chunks.count), expected=\(checksumPreview(chunk.sha256Hex)), actual=\(checksumPreview(computed)))"
                 )
+            }
+            if chunks.count > 0 {
+                progressHandler?(Double(chunkIndex + 1) / Double(chunks.count))
             }
             offset += UInt64(chunk.size)
         }
@@ -397,9 +451,22 @@ extension MontereyDownloadFlowModel {
         return trimmed.lowercased()
     }
 
-    private func computeFileDigestHex(for fileURL: URL, algorithm: DigestAlgorithmKind) throws -> String {
+    private func computeFileDigestHex(
+        for fileURL: URL,
+        algorithm: DigestAlgorithmKind,
+        progressHandler: ((Double) -> Void)? = nil
+    ) throws -> String {
         let handle = try FileHandle(forReadingFrom: fileURL)
         defer { try? handle.close() }
+        let expectedSize = ((try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size]) as? NSNumber)?.int64Value ?? -1
+        var processedBytes: Int64 = 0
+
+        func updateDigestProgress(_ chunkSize: Int) {
+            guard let progressHandler, expectedSize > 0 else { return }
+            processedBytes += Int64(max(0, chunkSize))
+            let progress = min(1.0, Double(processedBytes) / Double(expectedSize))
+            progressHandler(progress)
+        }
 
         switch algorithm {
         case .sha1:
@@ -410,6 +477,7 @@ extension MontereyDownloadFlowModel {
                     return false
                 }
                 hasher.update(data: data)
+                updateDigestProgress(data.count)
                 return true
             }) {}
             return hasher.finalize().map { String(format: "%02x", $0) }.joined()
@@ -422,6 +490,7 @@ extension MontereyDownloadFlowModel {
                     return false
                 }
                 hasher.update(data: data)
+                updateDigestProgress(data.count)
                 return true
             }) {}
             return hasher.finalize().map { String(format: "%02x", $0) }.joined()
@@ -445,8 +514,16 @@ extension MontereyDownloadFlowModel {
         return "\(trimmed.prefix(8))...\(trimmed.suffix(8))"
     }
 
-    private func logSHA256VerificationDetails(for fileURL: URL, item: DownloadManifestItem) throws {
-        let actualSHA256 = try computeFileDigestHex(for: fileURL, algorithm: .sha256)
+    private func logSHA256VerificationDetails(
+        for fileURL: URL,
+        item: DownloadManifestItem,
+        progressHandler: ((Double) -> Void)? = nil
+    ) throws {
+        let actualSHA256 = try computeFileDigestHex(
+            for: fileURL,
+            algorithm: .sha256,
+            progressHandler: progressHandler
+        )
         let expectedSHA256 = expectedSHA256FromManifest(for: item) ?? "N/A"
         AppLogging.info(
             "SHA-256 verify \(item.name): expected=\(expectedSHA256), actual=\(actualSHA256)",

@@ -5,7 +5,7 @@ This document describes the runtime behavior, UI contract, and technical pipelin
 Scope note:
 - This file is focused on downloader behavior only.
 - Process/commit rules are in `docs/AGENTS.md`.
-- Global app runtime contract is in `docs/reference/APPLICATION_REFERENCE.md`.
+- Global runtime documentation map is in `docs/reference/README.md`.
 
 ## Table of Contents
 1. [Purpose and Scope](#1-purpose-and-scope)
