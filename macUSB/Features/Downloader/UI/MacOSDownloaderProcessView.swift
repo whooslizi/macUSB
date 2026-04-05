@@ -199,7 +199,7 @@ extension MacOSDownloaderWindowShellView {
         case .verifying:
             return "checklist"
         case .buildingInstaller:
-            return "shippingbox.fill"
+            return "hammer.circle.fill"
         case .cleanup:
             return "trash.fill"
         }
@@ -214,7 +214,7 @@ extension MacOSDownloaderWindowShellView {
         case .verifying:
             return "Weryfikowanie plików - \(downloadFlowModel.verifyCurrentIndex)/\(downloadFlowModel.verifyTotal)"
         case .buildingInstaller:
-            return "Użycie pakietu .pkg do zbudowania instalatora .app"
+            return "Budowanie instalatora macOS"
         case .cleanup:
             return "Czyszczenie plików tymczasowych"
         }

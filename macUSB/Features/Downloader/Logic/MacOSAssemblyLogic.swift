@@ -16,63 +16,61 @@ extension MontereyDownloadFlowModel {
         buildProgress = 0
 
         let assemblySelection = try resolveAssemblyInput(in: manifest)
-        let assemblyInputURL: URL
-        switch assemblySelection.workflow {
-        case .legacy:
-            assemblyInputURL = try await prepareLegacyDistributionInput(
-                manifest: manifest,
-                fallbackPackageURL: assemblySelection.inputURL
-            )
-        case .modern:
-            assemblyInputURL = assemblySelection.inputURL
-        }
-        guard let outputDirectory = activeSessionOutputURL else {
-            throw DownloadFailureReason.assemblyFailed("Brak katalogu output sesji")
-        }
 
         AppLogging.info(
-            "Assembly workflow=\(assemblySelection.workflow.rawValue), input=\(assemblyInputURL.lastPathComponent), entry=\(entry.name) \(entry.version)",
+            "Assembly workflow=\(assemblySelection.workflow.rawValue), input=\(assemblySelection.inputURL.lastPathComponent), entry=\(entry.name) \(entry.version)",
             category: "Downloader"
         )
 
-        let request = DownloaderAssemblyRequestPayload(
-            packagePath: assemblyInputURL.path,
-            outputDirectoryPath: outputDirectory.path,
-            expectedAppName: expectedInstallerAppName(for: entry),
-            finalDestinationDirectoryPath: "",
-            cleanupSessionFiles: false,
-            requesterUID: getuid(),
-            patchLegacyDistributionInDebug: shouldPatchLegacyDistributionInDebug()
-        )
-        cleanupDelegatedToHelper = request.cleanupSessionFiles
+        let finalAppURL: URL
+        switch assemblySelection.workflow {
+        case .legacy:
+            finalAppURL = try await runLegacyAssemblyWithoutRoot(
+                manifest: manifest,
+                entry: entry
+            )
+        case .modern:
+            guard let outputDirectory = activeSessionOutputURL else {
+                throw DownloadFailureReason.assemblyFailed("Brak katalogu output sesji")
+            }
+            let request = DownloaderAssemblyRequestPayload(
+                packagePath: assemblySelection.inputURL.path,
+                outputDirectoryPath: outputDirectory.path,
+                expectedAppName: expectedInstallerAppName(for: entry),
+                finalDestinationDirectoryPath: "",
+                cleanupSessionFiles: false,
+                requesterUID: getuid(),
+                patchLegacyDistributionInDebug: false
+            )
+            cleanupDelegatedToHelper = request.cleanupSessionFiles
 
-        let result = try await startAssemblyWithHelper(request: request)
-        if result.cleanupRequested && result.cleanupSucceeded {
-            sessionCleanupHandledByHelper = true
-            helperCleanupFailureMessage = nil
-            activeSessionRootURL = nil
-            activeSessionPayloadURL = nil
-            activeSessionOutputURL = nil
-        } else if result.cleanupRequested {
-            sessionCleanupHandledByHelper = false
-            helperCleanupFailureMessage = result.cleanupErrorMessage
-        } else {
-            // Cleanup sesji wykonujemy zawsze jako osobny, ostatni etap
-            // bezposrednio przed podsumowaniem.
-            sessionCleanupHandledByHelper = false
-            helperCleanupFailureMessage = nil
-        }
+            let result = try await startAssemblyWithHelper(request: request)
+            if result.cleanupRequested && result.cleanupSucceeded {
+                sessionCleanupHandledByHelper = true
+                helperCleanupFailureMessage = nil
+                activeSessionRootURL = nil
+                activeSessionPayloadURL = nil
+                activeSessionOutputURL = nil
+            } else if result.cleanupRequested {
+                sessionCleanupHandledByHelper = false
+                helperCleanupFailureMessage = result.cleanupErrorMessage
+            } else {
+                sessionCleanupHandledByHelper = false
+                helperCleanupFailureMessage = nil
+            }
 
-        guard result.success else {
-            throw DownloadFailureReason.assemblyFailed(result.errorMessage ?? "Helper zwrocil blad assembly")
-        }
-        guard let outputAppPath = result.outputAppPath else {
-            throw DownloadFailureReason.assemblyFailed("Helper nie zwrocil sciezki do instalatora .app")
-        }
+            guard result.success else {
+                throw DownloadFailureReason.assemblyFailed(result.errorMessage ?? "Helper zwrocil blad assembly")
+            }
+            guard let outputAppPath = result.outputAppPath else {
+                throw DownloadFailureReason.assemblyFailed("Helper nie zwrocil sciezki do instalatora .app")
+            }
 
-        let finalAppURL = URL(fileURLWithPath: outputAppPath)
-        guard FileManager.default.fileExists(atPath: finalAppURL.path) else {
-            throw DownloadFailureReason.assemblyFailed("Zbudowana aplikacja instalatora nie istnieje")
+            let producedURL = URL(fileURLWithPath: outputAppPath)
+            guard FileManager.default.fileExists(atPath: producedURL.path) else {
+                throw DownloadFailureReason.assemblyFailed("Zbudowana aplikacja instalatora nie istnieje")
+            }
+            finalAppURL = producedURL
         }
 
         finalInstallerAppURL = finalAppURL
@@ -89,14 +87,6 @@ extension MontereyDownloadFlowModel {
             "Assembly success destination=\(finalAppURL.path)",
             category: "Downloader"
         )
-    }
-
-    private func shouldPatchLegacyDistributionInDebug() -> Bool {
-        #if DEBUG
-        return patchLegacyDistributionInDebug
-        #else
-        return false
-        #endif
     }
 
     private func expectedInstallerAppName(for entry: MacOSInstallerEntry) -> String {
@@ -137,61 +127,328 @@ extension MontereyDownloadFlowModel {
         )
     }
 
-    private func prepareLegacyDistributionInput(
+    private struct LegacyAssemblyFiles {
+        let installAssistantAuto: URL
+        let recoveryHDMetaDmg: URL
+        let installESDDmg: URL
+    }
+
+    private func runLegacyAssemblyWithoutRoot(
         manifest: DownloadManifest,
-        fallbackPackageURL: URL
+        entry: MacOSInstallerEntry
     ) async throws -> URL {
-        guard let payloadURL = activeSessionPayloadURL else {
-            throw DownloadFailureReason.assemblyFailed("Brak katalogu payload sesji")
-        }
-        guard let distributionURL = manifest.distributionURL else {
-            throw DownloadFailureReason.assemblyFailed("Brak pliku .dist dla workflow Legacy")
+        guard let sessionRootURL = activeSessionRootURL else {
+            throw DownloadFailureReason.assemblyFailed("Brak katalogu sesji dla legacy assembly")
         }
 
-        let fileName = distributionURL.lastPathComponent.isEmpty
-            ? "\(manifest.productID).dist"
-            : distributionURL.lastPathComponent
-        let localDistributionURL = payloadURL.appendingPathComponent(fileName)
-
-        if FileManager.default.fileExists(atPath: localDistributionURL.path) {
-            AppLogging.info(
-                "Legacy assembly: wykorzystuje lokalny plik .dist \(localDistributionURL.lastPathComponent).",
-                category: "Downloader"
-            )
-            return localDistributionURL
-        }
+        let files = try resolveLegacyAssemblyFiles(from: manifest)
+        let workspaceURL = sessionRootURL.appendingPathComponent("legacy_assembly", isDirectory: true)
+        let expandedURL = workspaceURL.appendingPathComponent("InstallAssistant", isDirectory: true)
+        let mountURL = workspaceURL.appendingPathComponent("RecoveryHDMount_\(UUID().uuidString)", isDirectory: true)
 
         AppLogging.info(
-            "Legacy assembly: pobieranie pliku .dist \(distributionURL.absoluteString).",
+            "Legacy assembly: start entry=\(entry.name) \(entry.version), workspace=\(workspaceURL.path)",
+            category: "Downloader"
+        )
+        AppLogging.info(
+            "Legacy assembly: inputs resolved InstallAssistantAuto=\(files.installAssistantAuto.lastPathComponent), RecoveryHDMetaDmg=\(files.recoveryHDMetaDmg.lastPathComponent), InstallESDDmg=\(files.installESDDmg.lastPathComponent)",
             category: "Downloader"
         )
 
-        var request = URLRequest(url: distributionURL)
-        request.timeoutInterval = 30
-        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
-            throw DownloadFailureReason.assemblyFailed("Nie udalo sie pobrac pliku .dist dla workflow Legacy")
+        do {
+            if FileManager.default.fileExists(atPath: workspaceURL.path) {
+                try FileManager.default.removeItem(at: workspaceURL)
+            }
+            try FileManager.default.createDirectory(at: workspaceURL, withIntermediateDirectories: true)
+            try FileManager.default.createDirectory(at: mountURL, withIntermediateDirectories: true)
+        } catch {
+            throw DownloadFailureReason.assemblyFailed("Nie udalo sie przygotowac katalogu roboczego legacy: \(error.localizedDescription)")
         }
-        if data.isEmpty {
-            throw DownloadFailureReason.assemblyFailed("Pobrany plik .dist jest pusty")
+
+        var recoveryMounted = false
+        defer {
+            if recoveryMounted {
+                AppLogging.info(
+                    "Legacy assembly: cleanup detach recovery mount=\(mountURL.path)",
+                    category: "Downloader"
+                )
+                _ = try? runProcessAndCaptureOutput(
+                    executable: "/usr/bin/hdiutil",
+                    arguments: ["detach", mountURL.path, "-force"]
+                )
+            }
+            try? FileManager.default.removeItem(at: mountURL)
+        }
+
+        _ = try await runCommandWithBuildProgress(
+            executable: "/usr/sbin/pkgutil",
+            arguments: ["--expand-full", files.installAssistantAuto.path, expandedURL.path],
+            statusText: "Rozpakowuję pakiet InstallAssistantAuto.pkg...",
+            progressStart: 0.08,
+            progressEnd: 0.26,
+            stepName: "pkgutil expand"
+        )
+
+        let payloadURL = expandedURL.appendingPathComponent("Payload", isDirectory: true)
+        let appURL = try locateLegacyInstallerApp(in: payloadURL)
+        AppLogging.info(
+            "Legacy assembly: detected app bundle path=\(appURL.path)",
+            category: "Downloader"
+        )
+        let sharedSupportURL = appURL.appendingPathComponent("Contents/SharedSupport", isDirectory: true)
+
+        try await runLegacyFileStepWithProgress(
+            statusText: "Przygotowuję pliki SharedSupport...",
+            progressStart: 0.28,
+            progressEnd: 0.38,
+            stepName: "prepare SharedSupport"
+        ) {
+            try FileManager.default.createDirectory(at: sharedSupportURL, withIntermediateDirectories: true)
+            let installESDDestinationURL = sharedSupportURL.appendingPathComponent("InstallESD.dmg")
+            try self.copyItemReplacing(sourceURL: files.installESDDmg, destinationURL: installESDDestinationURL)
+        }
+
+        _ = try await runCommandWithBuildProgress(
+            executable: "/usr/bin/hdiutil",
+            arguments: ["attach", "-readonly", "-nobrowse", files.recoveryHDMetaDmg.path, "-mountpoint", mountURL.path]
+                ,
+            statusText: "Montuję RecoveryHDMetaDmg.pkg...",
+            progressStart: 0.40,
+            progressEnd: 0.52,
+            stepName: "attach recovery image"
+        )
+        recoveryMounted = true
+
+        try await runLegacyFileStepWithProgress(
+            statusText: "Kopiuję zasoby RecoveryHD do SharedSupport...",
+            progressStart: 0.54,
+            progressEnd: 0.72,
+            stepName: "copy RecoveryHD assets"
+        ) {
+            let mountedItems = try FileManager.default.contentsOfDirectory(
+                at: mountURL,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )
+            for sourceItem in mountedItems {
+                let destinationItem = sharedSupportURL.appendingPathComponent(sourceItem.lastPathComponent, isDirectory: false)
+                try self.copyItemReplacing(sourceURL: sourceItem, destinationURL: destinationItem)
+            }
+        }
+
+        buildStatusText = "Kończę montowanie RecoveryHD..."
+        buildProgress = 0.74
+        AppLogging.info(
+            "Legacy assembly: detach recovery mount=\(mountURL.path)",
+            category: "Downloader"
+        )
+        _ = try? runProcessAndCaptureOutput(
+            executable: "/usr/bin/hdiutil",
+            arguments: ["detach", mountURL.path, "-force"]
+        )
+        recoveryMounted = false
+
+        let destinationURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
+            .appendingPathComponent(expectedInstallerAppName(for: entry), isDirectory: true)
+        try await runLegacyFileStepWithProgress(
+            statusText: "Przenoszę gotowy instalator do /Applications...",
+            progressStart: 0.80,
+            progressEnd: 0.96,
+            stepName: "copy installer to /Applications"
+        ) {
+            try self.copyItemReplacing(sourceURL: appURL, destinationURL: destinationURL)
+        }
+
+        AppLogging.info(
+            "Legacy assembly: installer ready path=\(destinationURL.path)",
+            category: "Downloader"
+        )
+        return destinationURL
+    }
+
+    private func locateLegacyInstallerApp(in payloadURL: URL) throws -> URL {
+        let entries = try FileManager.default.contentsOfDirectory(
+            at: payloadURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )
+        guard let installerApp = entries.first(where: { candidate in
+            candidate.pathExtension.lowercased() == "app"
+                && candidate.lastPathComponent.lowercased().hasPrefix("install ")
+        }) else {
+            throw DownloadFailureReason.assemblyFailed("Nie znaleziono aplikacji Install macOS .app po rozpakowaniu InstallAssistantAuto.pkg")
+        }
+        return installerApp
+    }
+
+    private func copyItemReplacing(sourceURL: URL, destinationURL: URL) throws {
+        if FileManager.default.fileExists(atPath: destinationURL.path) {
+            try FileManager.default.removeItem(at: destinationURL)
+        }
+        try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+    }
+
+    private func resolveLegacyAssemblyFiles(from manifest: DownloadManifest) throws -> LegacyAssemblyFiles {
+        let requiredPackageIDs: [String: String] = [
+            "com.apple.pkg.InstallAssistantAuto": "InstallAssistantAuto.pkg",
+            "com.apple.pkg.RecoveryHDMetaDmg": "RecoveryHDMetaDmg.pkg",
+            "com.apple.pkg.InstallESDDmg": "InstallESDDmg.pkg"
+        ]
+
+        var resolvedByID: [String: URL] = [:]
+        for item in manifest.items {
+            guard let packageID = item.packageIdentifier?.lowercased(),
+                  requiredPackageIDs.keys.contains(where: { $0.lowercased() == packageID })
+            else {
+                continue
+            }
+            if let localURL = downloadedFileURLsByItemID[item.id] {
+                resolvedByID[packageID] = localURL
+            }
+        }
+
+        func resolveRequiredFile(_ packageIdentifier: String) -> URL? {
+            if let byID = resolvedByID[packageIdentifier.lowercased()],
+               FileManager.default.fileExists(atPath: byID.path) {
+                return byID
+            }
+            guard let fallbackName = requiredPackageIDs[packageIdentifier] else { return nil }
+            if let fallbackItem = manifest.items.first(where: { item in
+                item.name.caseInsensitiveCompare(fallbackName) == .orderedSame
+                    || item.url.lastPathComponent.caseInsensitiveCompare(fallbackName) == .orderedSame
+            }), let fallbackURL = downloadedFileURLsByItemID[fallbackItem.id],
+               FileManager.default.fileExists(atPath: fallbackURL.path) {
+                return fallbackURL
+            }
+            return nil
+        }
+
+        guard let installAssistantAuto = resolveRequiredFile("com.apple.pkg.InstallAssistantAuto") else {
+            throw DownloadFailureReason.assemblyFailed("Brak wymaganego pliku InstallAssistantAuto.pkg dla legacy assembly")
+        }
+        guard let recoveryHDMetaDmg = resolveRequiredFile("com.apple.pkg.RecoveryHDMetaDmg") else {
+            throw DownloadFailureReason.assemblyFailed("Brak wymaganego pliku RecoveryHDMetaDmg.pkg dla legacy assembly")
+        }
+        guard let installESDDmg = resolveRequiredFile("com.apple.pkg.InstallESDDmg") else {
+            throw DownloadFailureReason.assemblyFailed("Brak wymaganego pliku InstallESDDmg.pkg dla legacy assembly")
+        }
+
+        return LegacyAssemblyFiles(
+            installAssistantAuto: installAssistantAuto,
+            recoveryHDMetaDmg: recoveryHDMetaDmg,
+            installESDDmg: installESDDmg
+        )
+    }
+
+    private func runLegacyFileStepWithProgress(
+        statusText: String,
+        progressStart: Double,
+        progressEnd: Double,
+        stepName: String,
+        operation: @escaping () throws -> Void
+    ) async throws {
+        AppLogging.info("Legacy assembly: \(stepName) start", category: "Downloader")
+        buildStatusText = statusText
+        buildProgress = max(buildProgress ?? progressStart, progressStart)
+
+        let progressTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            var currentProgress = max(self.buildProgress ?? progressStart, progressStart)
+            while !Task.isCancelled {
+                currentProgress = min(progressEnd - 0.01, currentProgress + 0.01)
+                self.buildProgress = currentProgress
+                try? await Task.sleep(nanoseconds: 120_000_000)
+            }
         }
 
         do {
-            try data.write(to: localDistributionURL, options: .atomic)
+            try await runBlockingOperation(operation)
+            progressTask.cancel()
+            buildProgress = max(buildProgress ?? progressStart, progressEnd)
+            AppLogging.info("Legacy assembly: \(stepName) success", category: "Downloader")
         } catch {
-            throw DownloadFailureReason.assemblyFailed("Nie udalo sie zapisac pliku .dist: \(error.localizedDescription)")
+            progressTask.cancel()
+            let message = error.localizedDescription
+            AppLogging.error("Legacy assembly: \(stepName) failed: \(message)", category: "Downloader")
+            if error is DownloadFailureReason {
+                throw error
+            }
+            throw DownloadFailureReason.assemblyFailed(message)
+        }
+    }
+
+    private func runCommandWithBuildProgress(
+        executable: String,
+        arguments: [String],
+        statusText: String,
+        progressStart: Double,
+        progressEnd: Double,
+        stepName: String
+    ) async throws -> String {
+        AppLogging.info(
+            "Legacy assembly: \(stepName) start executable=\(URL(fileURLWithPath: executable).lastPathComponent) args=\(arguments.joined(separator: " "))",
+            category: "Downloader"
+        )
+        buildStatusText = statusText
+        buildProgress = max(buildProgress ?? progressStart, progressStart)
+
+        let progressTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            var currentProgress = max(self.buildProgress ?? progressStart, progressStart)
+            while !Task.isCancelled {
+                currentProgress = min(progressEnd - 0.01, currentProgress + 0.008)
+                self.buildProgress = currentProgress
+                try? await Task.sleep(nanoseconds: 150_000_000)
+            }
         }
 
-        AppLogging.info(
-            "Legacy assembly: zapisano .dist lokalnie pod \(localDistributionURL.path).",
-            category: "Downloader"
-        )
-        AppLogging.info(
-            "Legacy assembly: fallback package pozostaje dostepny pod \(fallbackPackageURL.lastPathComponent).",
-            category: "Downloader"
-        )
-        return localDistributionURL
+        do {
+            let output = try await runProcessAndCaptureOutputOffMain(
+                executable: executable,
+                arguments: arguments
+            )
+            progressTask.cancel()
+            buildProgress = max(buildProgress ?? progressStart, progressEnd)
+            AppLogging.info("Legacy assembly: \(stepName) success", category: "Downloader")
+            return output
+        } catch {
+            progressTask.cancel()
+            throw error
+        }
+    }
+
+    private func runBlockingOperation(
+        _ operation: @escaping () throws -> Void
+    ) async throws {
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try operation()
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    private func runProcessAndCaptureOutputOffMain(
+        executable: String,
+        arguments: [String]
+    ) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let output = try Self.runProcessAndCaptureOutputBlocking(
+                        executable: executable,
+                        arguments: arguments
+                    )
+                    continuation.resume(returning: output)
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
     }
 
     private func startAssemblyWithHelper(
@@ -361,5 +618,59 @@ extension MontereyDownloadFlowModel {
             }
         }
         return unique
+    }
+
+    @discardableResult
+    private func runProcessAndCaptureOutput(
+        executable: String,
+        arguments: [String]
+    ) throws -> String {
+        try Self.runProcessAndCaptureOutputBlocking(
+            executable: executable,
+            arguments: arguments
+        )
+    }
+
+    private static func runProcessAndCaptureOutputBlocking(
+        executable: String,
+        arguments: [String]
+    ) throws -> String {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+
+        do {
+            try process.run()
+            process.waitUntilExit()
+        } catch {
+            throw DownloadFailureReason.assemblyFailed(
+                "Nie udalo sie uruchomic \(URL(fileURLWithPath: executable).lastPathComponent): \(error.localizedDescription)"
+            )
+        }
+
+        let output = String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let errors = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+        let merged = ([output, errors].filter { !$0.isEmpty }).joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if !merged.isEmpty {
+            AppLogging.info(
+                "legacy-assembly command \(URL(fileURLWithPath: executable).lastPathComponent): \(merged)",
+                category: "Downloader"
+            )
+        }
+
+        guard process.terminationStatus == 0 else {
+            throw DownloadFailureReason.assemblyFailed(
+                "Polecenie \(URL(fileURLWithPath: executable).lastPathComponent) zakonczone bledem (\(process.terminationStatus))."
+            )
+        }
+
+        return merged
     }
 }

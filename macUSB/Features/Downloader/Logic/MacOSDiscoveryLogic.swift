@@ -203,6 +203,18 @@ private struct MacOSCatalogService {
             LegacySupportEntry(label: "Mountain Lion 10.8", name: "OS X Mountain Lion", version: "10.8.5"),
             LegacySupportEntry(label: "Lion 10.7", name: "Mac OS X Lion", version: "10.7.5")
         ]
+
+        static let legacyAssemblyRequiredPackageIdentifiers: [String] = [
+            "com.apple.pkg.InstallAssistantAuto",
+            "com.apple.pkg.RecoveryHDMetaDmg",
+            "com.apple.pkg.InstallESDDmg"
+        ]
+
+        static let legacyAssemblyRequiredFileNames: [String] = [
+            "InstallAssistantAuto.pkg",
+            "RecoveryHDMetaDmg.pkg",
+            "InstallESDDmg.pkg"
+        ]
     }
 
     private enum ProbeMethod: String {
@@ -237,6 +249,7 @@ private struct MacOSCatalogService {
     private struct CatalogPackageDescriptor {
         let name: String
         let url: URL
+        let packageIdentifier: String?
         let sizeBytes: Int64?
         let digest: String?
         let digestAlgorithm: String?
@@ -343,7 +356,7 @@ private struct MacOSCatalogService {
         let majorVersion = entry.version.split(separator: ".").first.map(String.init) ?? ""
         let normalizedName = entry.name.lowercased()
         let supportedMajors: Set<String> = ["11", "12", "13", "14", "15", "26"]
-        let supportedNameTokens = ["catalina", "big sur", "monterey", "ventura", "sonoma", "sequoia", "tahoe"]
+        let supportedNameTokens = ["high sierra", "mojave", "catalina", "big sur", "monterey", "ventura", "sonoma", "sequoia", "tahoe"]
         let hasSupportedName = supportedNameTokens.contains { normalizedName.contains($0) }
         let isCatalina = normalizedName.contains("catalina") && entry.version.hasPrefix("10.15")
         guard supportedMajors.contains(majorVersion) || hasSupportedName || isCatalina else {
@@ -375,6 +388,9 @@ private struct MacOSCatalogService {
         descriptors = descriptors.filter { descriptor in
             isAllowedHost(descriptor.url) && isDownloadAssetURL(descriptor.url)
         }
+        if isLegacyAssemblyTarget(entry) {
+            descriptors = filterLegacyAssemblyDescriptors(descriptors)
+        }
         guard !descriptors.isEmpty else {
             throw DiscoveryError.emptyDownloadManifest
         }
@@ -402,6 +418,7 @@ private struct MacOSCatalogService {
                 order: index,
                 name: descriptor.name,
                 url: descriptor.url,
+                packageIdentifier: descriptor.packageIdentifier,
                 expectedSizeBytes: resolvedSizeBytes,
                 expectedDigest: descriptor.digest,
                 digestAlgorithm: descriptor.digestAlgorithm,
@@ -537,6 +554,8 @@ private struct MacOSCatalogService {
             let descriptor = CatalogPackageDescriptor(
                 name: packageDisplayName(for: url),
                 url: url,
+                packageIdentifier: (package["PackageIdentifier"] as? String)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines),
                 sizeBytes: parseInt64(from: package["Size"]),
                 digest: (package["Digest"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
                 digestAlgorithm: (package["DigestAlgorithm"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -554,6 +573,54 @@ private struct MacOSCatalogService {
             return lastComponent
         }
         return url.absoluteString
+    }
+
+    private func isLegacyAssemblyTarget(_ entry: MacOSInstallerEntry) -> Bool {
+        let normalized = entry.name.lowercased()
+        if normalized.contains("catalina"), entry.version.hasPrefix("10.15") {
+            return true
+        }
+        if normalized.contains("mojave"), entry.version.hasPrefix("10.14") {
+            return true
+        }
+        if normalized.contains("high sierra"), entry.version.hasPrefix("10.13") {
+            return true
+        }
+        return false
+    }
+
+    private func filterLegacyAssemblyDescriptors(_ descriptors: [CatalogPackageDescriptor]) -> [CatalogPackageDescriptor] {
+        let requiredIDs = Set(Constants.legacyAssemblyRequiredPackageIdentifiers.map { $0.lowercased() })
+        let requiredNames = Set(Constants.legacyAssemblyRequiredFileNames.map { $0.lowercased() })
+
+        var filtered = descriptors.filter { descriptor in
+            if let packageIdentifier = descriptor.packageIdentifier?.lowercased(), requiredIDs.contains(packageIdentifier) {
+                return true
+            }
+            return requiredNames.contains(descriptor.url.lastPathComponent.lowercased())
+        }
+
+        let idPriority = Dictionary(
+            uniqueKeysWithValues: Constants.legacyAssemblyRequiredPackageIdentifiers.enumerated().map { ($1.lowercased(), $0) }
+        )
+        let namePriority = Dictionary(
+            uniqueKeysWithValues: Constants.legacyAssemblyRequiredFileNames.enumerated().map { ($1.lowercased(), $0) }
+        )
+
+        filtered.sort { lhs, rhs in
+            let lhsRank = lhs.packageIdentifier.flatMap { idPriority[$0.lowercased()] }
+                ?? namePriority[lhs.url.lastPathComponent.lowercased()]
+                ?? Int.max
+            let rhsRank = rhs.packageIdentifier.flatMap { idPriority[$0.lowercased()] }
+                ?? namePriority[rhs.url.lastPathComponent.lowercased()]
+                ?? Int.max
+            if lhsRank != rhsRank {
+                return lhsRank < rhsRank
+            }
+            return lhs.name < rhs.name
+        }
+
+        return filtered
     }
 
     private func parseInt64(from value: Any?) -> Int64? {

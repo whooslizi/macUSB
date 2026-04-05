@@ -61,7 +61,7 @@ Downloader split:
 - Logic:
   - discovery, download, verification, assembly, cleanup.
 - Helper bridge:
-  - privileged assembly and privileged final cleanup over XPC.
+  - `Modern` assembly and final privileged cleanup over XPC.
 
 Runtime orchestration:
 - `MacOSDownloaderWindowShellView` owns:
@@ -116,7 +116,7 @@ Discovery UX contract:
 
 Production pipeline (`MontereyDownloadFlowModel`) uses two compatible distribution modes:
 - `Modern`: Big Sur, Monterey, Ventura, Sonoma, Sequoia, Tahoe (`InstallAssistant.pkg -> .app`).
-- `Legacy`: Catalina and compatible older Apple full-installer products (`InstallAssistantAuto.pkg` with companion payload packages).
+- `Legacy`: High Sierra, Mojave, Catalina (`InstallAssistantAuto.pkg` + `RecoveryHDMetaDmg.pkg` + `InstallESDDmg.pkg`).
 
 Both modes share the same staged UI and runtime skeleton:
 1. Connection / preflight
@@ -131,8 +131,9 @@ Both modes share the same staged UI and runtime skeleton:
   - IntegrityData/chunklist verification when available,
   - digest fallback and package-signature fallback where needed.
 4. Installer build and move
-  - helper-based `.pkg` to `.app` assembly,
-  - final move to configured destination folder.
+  - `Legacy`: in-app assembly (without root) using `pkgutil --expand-full` + `hdiutil attach` and SharedSupport composition,
+  - `Modern`: helper-based `InstallAssistant.pkg -> .app`,
+  - final installer is placed in `/Applications`.
 5. Final cleanup
   - dedicated helper-side cleanup of session temp directory,
   - executed as last stage before summary.
@@ -174,9 +175,7 @@ Downloader uses dedicated helper operations:
   - result: `DownloaderCleanupResultPayload`.
 
 Helper responsibilities in downloader flow:
-- build installer `.app` from package,
-- move installer to destination,
-- normalize final `.app` ownership to requester UID,
+- build installer `.app` from `InstallAssistant.pkg` for `Modern` workflow,
 - perform final privileged cleanup of session temp directory.
 
 ---

@@ -70,7 +70,7 @@ Update this section when startup permission order, permission prompts, or permis
 - Tools menu includes `Download macOS installer...`, which opens a dedicated downloader sheet.
 - Entering the downloader sheet triggers on-demand discovery (not app startup discovery) of officially available macOS/OS X installers from Apple endpoints.
 - During discovery, downloader keeps the systems-list header visible and shows an inline progress panel (in the list area) with cancel action; options stay visible but disabled until scanning completes, then the panel transitions out and grouped installer entries are shown.
-- Production download flow is currently enabled for selected entries in `macOS Catalina`, `Big Sur`, `Monterey`, `Ventura`, `Sonoma`, `Sequoia`, and `Tahoe`: preflight fetches real package manifest and sizes, then downloader runs sequential download, verification, helper-based `.app` assembly, and summary.
+- Production download flow is currently enabled for selected entries in `macOS High Sierra`, `Mojave`, `Catalina`, `Big Sur`, `Monterey`, `Ventura`, `Sonoma`, `Sequoia`, and `Tahoe`: preflight fetches real package manifest and sizes, then downloader runs sequential download, verification, workflow-specific assembly (`Legacy` in app process without root, `Modern` via helper), and summary.
 - Download artifacts are staged in `macUSB_temp/downloads/<session_id>` and final installer is moved to `~/Poza iCloud` with collision suffixing (`(2)`, `(3)`, ...).
 - In `DEBUG` builds, downloader options include `DEBUG: Nie usuwaj pobranych plikow`; when enabled, session files are retained after success/failure/cancel until application shutdown cleanup.
 - Application termination performs final cleanup of `macUSB_temp` to avoid leaving temporary downloader artifacts across sessions.
@@ -287,7 +287,7 @@ Core runtime areas:
 - `DownloaderAssembly/DownloaderAssemblyProcess.swift`
 - `macUSB/Resources/Localizable.xcstrings` — localization catalog.
 
-Downloader includes production runtime behavior for Catalina, Big Sur, Monterey, Ventura, Sonoma, Sequoia, and Tahoe download flow, split into `Legacy` (InstallAssistantAuto-based) and `Modern` (InstallAssistant.pkg-based) distribution modes; USB creation and analysis contracts remain untouched.
+Downloader includes production runtime behavior for High Sierra, Mojave, Catalina, Big Sur, Monterey, Ventura, Sonoma, Sequoia, and Tahoe download flow, split into `Legacy` (InstallAssistantAuto + companion packages assembled in app process, without root) and `Modern` (InstallAssistant.pkg-based helper assembly) distribution modes; USB creation and analysis contracts remain untouched.
 
 File relationships and responsibilities should remain consistent with runtime contracts above.
 

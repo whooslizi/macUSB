@@ -55,6 +55,7 @@ struct DownloadManifestItem: Identifiable, Hashable {
     let order: Int
     let name: String
     let url: URL
+    let packageIdentifier: String?
     let expectedSizeBytes: Int64
     let expectedDigest: String?
     let digestAlgorithm: String?
@@ -120,7 +121,6 @@ final class MontereyDownloadFlowModel: ObservableObject {
     @Published var discoveredDownloadItems: [DownloadManifestItem] = []
 
     @Published var preserveDownloadedFilesInDebug: Bool = false
-    @Published var patchLegacyDistributionInDebug: Bool = false
 
     var workflowTask: Task<Void, Never>?
     var processStartedAt: Date?
