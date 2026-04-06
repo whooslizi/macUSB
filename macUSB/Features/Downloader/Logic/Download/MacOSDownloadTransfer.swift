@@ -20,7 +20,7 @@ extension MontereyDownloadFlowModel {
             }
 
             downloadCurrentIndex = index + 1
-            downloadFileName = "Pobieranie \(item.name)..."
+            downloadFileName = "Pobieranie pliku \(item.name)..."
 
             let itemDestinationURL = payloadURL.appendingPathComponent(
                 destinationFileName(for: item, index: index, manifest: manifest)

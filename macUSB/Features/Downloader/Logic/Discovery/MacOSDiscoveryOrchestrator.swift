@@ -53,6 +53,10 @@ final class MacOSDownloaderLogic: ObservableObject {
         try await catalogService.fetchDownloadManifest(for: entry, phase: phase)
     }
 
+    func isOldestDownloadTarget(_ entry: MacOSInstallerEntry) -> Bool {
+        catalogService.isOldestInstallerTarget(entry)
+    }
+
     private func runDiscovery() async {
         do {
             let entries = try await catalogService.fetchStableInstallers { [weak self] phase in

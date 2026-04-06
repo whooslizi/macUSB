@@ -37,7 +37,7 @@ final class MacOSDownloaderWindowManager {
         )
 
         window.styleMask = [.titled]
-        window.title = String(localized: "Menedżer pobierania systemów macOS")
+        window.title = String(localized: "Pobieranie systemu macOS")
         window.setContentSize(fixedSize)
         window.minSize = fixedSize
         window.maxSize = fixedSize

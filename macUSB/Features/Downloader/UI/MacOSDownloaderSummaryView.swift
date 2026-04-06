@@ -10,31 +10,42 @@ extension MacOSDownloaderWindowShellView {
                 Image(systemName: isPartial ? "exclamationmark.triangle.fill" : (isFailure ? "xmark.circle.fill" : "checkmark.circle.fill"))
                     .font(.title3)
                     .foregroundColor(isPartial ? .orange : (isFailure ? .red : .green))
-                Text(isPartial ? "Pobieranie zakończone częściowo" : (isFailure ? "Pobieranie zakończone błędem" : "Pobieranie ukończone"))
+                Text(isPartial ? "Ukończono częściowo" : (isFailure ? "Nie udało się ukończyć" : "Gotowe"))
                     .font(.headline)
             }
 
             downloadSummaryMetricRow(
-                title: "Pobrane dane",
+                title: "Pobrano danych",
                 value: downloadFlowModel.summaryTotalDownloadedText
             )
             downloadSummaryMetricRow(
-                title: "Średnia szybkość transferu",
+                title: "Średnia szybkość",
                 value: downloadFlowModel.summaryAverageSpeedText
             )
             downloadSummaryMetricRow(
-                title: "Łączny czas pobierania",
+                title: "Czas pobierania",
                 value: downloadFlowModel.summaryDurationText
             )
+
+            Divider()
+
             downloadSummaryMetricRow(
-                title: "Utworzony plik",
+                title: "Instalator",
                 value: downloadFlowModel.summaryCreatedFileText
+            )
+            downloadSummaryMetricRow(
+                title: "Lokalizacja",
+                value: downloadFlowModel.summaryLocationText
+            )
+            downloadSummaryMetricRow(
+                title: "Stan porządkowania",
+                value: downloadFlowModel.summaryTemporaryFilesText
             )
 
             if isFailure, let failureMessage = downloadFlowModel.failureMessage, !failureMessage.isEmpty {
                 Divider()
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(isPartial ? "Status procesu" : "Szczegóły błędu")
+                    Text(isPartial ? "Status" : "Szczegóły")
                         .font(.subheadline.weight(.semibold))
                     Text(failureMessage)
                         .font(.subheadline)

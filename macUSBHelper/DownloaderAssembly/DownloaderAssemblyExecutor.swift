@@ -46,7 +46,7 @@ final class DownloaderAssemblyExecutor {
 
         do {
             try throwIfCancelled()
-            emit(percent: 0.02, status: "Przygotowanie etapu budowania .app")
+            emit(percent: 0.02, status: "Przygotowywanie aplikacji instalatora...")
 
             let packageURL = URL(fileURLWithPath: request.packagePath)
             guard FileManager.default.fileExists(atPath: packageURL.path) else {
@@ -62,14 +62,14 @@ final class DownloaderAssemblyExecutor {
 
             let assembledAppURL: URL
             if packageURL.pathExtension.caseInsensitiveCompare("dist") == .orderedSame {
-                emit(percent: 0.10, status: "Instalacja dystrybucji \(assemblyPackageName)")
+                emit(percent: 0.10, status: "Instalowanie składników systemu...")
                 assembledAppURL = try runLegacyDistributionAndLocateApp(
                     distributionURL: packageURL,
                     sessionRootDirectory: sessionRootDirectory,
                     patchLegacyDistribution: request.patchLegacyDistributionInDebug
                 )
             } else {
-                emit(percent: 0.10, status: "Instalacja pakietu \(assemblyPackageName)")
+                emit(percent: 0.10, status: "Instalowanie składników systemu...")
                 assembledAppURL = try runInstallerAndLocateApp(
                     packageURL: packageURL,
                     applyLegacyCompatibilityEnvironment: assemblyPackageName.caseInsensitiveCompare("InstallAssistantAuto.pkg") == .orderedSame
@@ -80,7 +80,7 @@ final class DownloaderAssemblyExecutor {
             let finalDestinationURL = assembledAppURL
             emit(
                 percent: 0.95,
-                status: "Instalator .app jest gotowy w /Applications",
+                status: "Instalator gotowy",
                 logLine: "assembly output-ready path=\(finalDestinationURL.path)"
             )
 
@@ -88,7 +88,7 @@ final class DownloaderAssemblyExecutor {
                 emit(percent: 0.98, status: "Czyszczenie plików tymczasowych sesji")
             }
 
-            emit(percent: 1.0, status: "Budowanie instalatora .app zakończone")
+            emit(percent: 1.0, status: "Instalator przygotowany")
             flowSuccess = true
             outputAppPath = finalDestinationURL.path
         } catch {

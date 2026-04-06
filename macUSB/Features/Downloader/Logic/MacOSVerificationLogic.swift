@@ -2,6 +2,18 @@ import Foundation
 import CryptoKit
 
 extension MontereyDownloadFlowModel {
+    private struct DownloadChecksumsManifest: Decodable {
+        let schemaVersion: Int
+        let systems: [DownloadChecksumRecord]
+    }
+
+    private struct DownloadChecksumRecord: Decodable {
+        let family: String
+        let name: String
+        let version: String
+        let sha256: String
+    }
+
     private enum DigestVerificationFailure: LocalizedError {
         case mismatch(fileName: String, algorithm: String, expected: String, actual: String)
 
@@ -13,7 +25,10 @@ extension MontereyDownloadFlowModel {
         }
     }
 
-    func runFileVerification(manifest: DownloadManifest) async throws {
+    func runFileVerification(
+        manifest: DownloadManifest,
+        entry: MacOSInstallerEntry
+    ) async throws {
         currentStage = .verifying
         verifyCurrentIndex = 0
         verifyTotal = manifest.items.count
@@ -42,6 +57,11 @@ extension MontereyDownloadFlowModel {
             }
 
             try verifyFileSize(for: localURL, expectedBytes: item.expectedSizeBytes, fileName: item.name)
+            let shouldRunOldestOnlyVerification = shouldRunOldestDedicatedVerification(for: entry, fileURL: localURL)
+            if shouldRunOldestOnlyVerification {
+                try verifyOldestReferenceSHA256(for: localURL, entry: entry)
+                try verifyEmbeddedPackageSignatureIfDiskImage(for: localURL, entry: entry)
+            }
             let isPackage = localURL.pathExtension.lowercased() == "pkg"
             if isPackage {
                 try verifyPackageSignature(for: localURL)
@@ -51,6 +71,16 @@ extension MontereyDownloadFlowModel {
                 totalCount: totalCount,
                 currentFileFraction: 0.15
             )
+
+            if shouldRunOldestOnlyVerification {
+                AppLogging.info(
+                    "Weryfikacja \(verifyCurrentIndex)/\(verifyTotal): oldest-only checks zakonczone sukcesem dla \(item.name)",
+                    category: "Downloader"
+                )
+                verifiedCount += 1
+                verifyProgress = min(1.0, Double(verifiedCount) / totalCount)
+                continue
+            }
 
             if try await verifyIntegrityDataChunklistIfAvailable(
                 for: localURL,
@@ -177,7 +207,10 @@ extension MontereyDownloadFlowModel {
         }
     }
 
-    private func verifyPackageSignature(for packageURL: URL) throws {
+    private func verifyPackageSignature(
+        for packageURL: URL,
+        allowExpiredAppleCertificate: Bool = false
+    ) throws {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/sbin/pkgutil")
         task.arguments = ["--check-signature", packageURL.path]
@@ -201,6 +234,14 @@ extension MontereyDownloadFlowModel {
         let details = [output, errors].joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
 
         if task.terminationStatus != 0 {
+            if allowExpiredAppleCertificate,
+               isExpiredAppleSignedPackageSignature(details) {
+                AppLogging.info(
+                    "Podpis pakietu zawiera wygasly certyfikat Apple, ale zostal zaakceptowany dla \(packageURL.lastPathComponent): \(details)",
+                    category: "Downloader"
+                )
+                return
+            }
             throw DownloadFailureReason.verificationFailed(
                 "Podpis pakietu nie zostal potwierdzony przez pkgutil dla \(packageURL.lastPathComponent)\(details.isEmpty ? "" : ": \(details)")"
             )
@@ -210,6 +251,193 @@ extension MontereyDownloadFlowModel {
             "Podpis pakietu potwierdzony (pkgutil) dla \(packageURL.lastPathComponent)\(details.isEmpty ? "" : ": \(details)")",
             category: "Downloader"
         )
+    }
+
+    private func isExpiredAppleSignedPackageSignature(_ details: String) -> Bool {
+        let normalized = details.lowercased()
+        let expired = normalized.contains("signed by a certificate that has since expired")
+        let appleChain = normalized.contains("software update")
+            && normalized.contains("apple software update certification authority")
+            && normalized.contains("apple root ca")
+        return expired && appleChain
+    }
+
+    private func verifyEmbeddedPackageSignatureIfDiskImage(
+        for diskImageURL: URL,
+        entry: MacOSInstallerEntry
+    ) throws {
+        guard diskImageURL.pathExtension.lowercased() == "dmg" else {
+            return
+        }
+
+        let mountURL = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+            .appendingPathComponent("macusb_verify_\(UUID().uuidString)", isDirectory: true)
+
+        var mounted = false
+        defer {
+            if mounted {
+                let detachTask = Process()
+                detachTask.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+                detachTask.arguments = ["detach", mountURL.path, "-force"]
+                detachTask.standardOutput = Pipe()
+                detachTask.standardError = Pipe()
+                try? detachTask.run()
+                detachTask.waitUntilExit()
+            }
+            try? FileManager.default.removeItem(at: mountURL)
+        }
+
+        do {
+            try FileManager.default.createDirectory(at: mountURL, withIntermediateDirectories: true)
+        } catch {
+            throw DownloadFailureReason.verificationFailed(
+                "Nie udalo sie przygotowac punktu montowania dla \(diskImageURL.lastPathComponent): \(error.localizedDescription)"
+            )
+        }
+
+        do {
+            let attachTask = Process()
+            attachTask.executableURL = URL(fileURLWithPath: "/usr/bin/hdiutil")
+            attachTask.arguments = [
+                "attach", "-readonly", "-nobrowse",
+                diskImageURL.path,
+                "-mountpoint", mountURL.path
+            ]
+
+            let stdout = Pipe()
+            let stderr = Pipe()
+            attachTask.standardOutput = stdout
+            attachTask.standardError = stderr
+            try attachTask.run()
+            attachTask.waitUntilExit()
+
+            let output = String(data: stdout.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            let errors = String(data: stderr.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+            let details = [output, errors].joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard attachTask.terminationStatus == 0 else {
+                throw DownloadFailureReason.verificationFailed(
+                    "Nie udalo sie zamontowac obrazu \(diskImageURL.lastPathComponent)\(details.isEmpty ? "" : ": \(details)")"
+                )
+            }
+            mounted = true
+        } catch let error as DownloadFailureReason {
+            throw error
+        } catch {
+            throw DownloadFailureReason.verificationFailed(
+                "Nie udalo sie uruchomic hdiutil dla \(diskImageURL.lastPathComponent): \(error.localizedDescription)"
+            )
+        }
+
+        let packageURLs = embeddedPackageCandidates(in: mountURL)
+        guard let packageURL = packageURLs.first else {
+            throw DownloadFailureReason.verificationFailed(
+                "W obrazie \(diskImageURL.lastPathComponent) nie znaleziono pliku .pkg do weryfikacji podpisu"
+            )
+        }
+
+        AppLogging.info(
+            "Weryfikacja podpisu pakietu z obrazu dla \(entry.name) \(entry.version): \(packageURL.path)",
+            category: "Downloader"
+        )
+        try verifyPackageSignature(
+            for: packageURL,
+            allowExpiredAppleCertificate: shouldAllowExpiredApplePackageSignature(for: entry)
+        )
+    }
+
+    private func shouldRunOldestDedicatedVerification(
+        for entry: MacOSInstallerEntry,
+        fileURL: URL
+    ) -> Bool {
+        guard fileURL.pathExtension.lowercased() == "dmg" else {
+            return false
+        }
+        let parts = entry.version.split(separator: ".")
+        guard let major = parts.first.flatMap({ Int($0) }), major == 10 else {
+            return false
+        }
+        let minor = parts.dropFirst().first.flatMap { Int($0) } ?? -1
+        return (7...12).contains(minor)
+    }
+
+    private func verifyOldestReferenceSHA256(
+        for fileURL: URL,
+        entry: MacOSInstallerEntry
+    ) throws {
+        let expectedSHA = try expectedReferenceChecksumForOldest(entry: entry)
+        let actualSHA = try computeFileDigestHex(for: fileURL, algorithm: .sha256)
+
+        AppLogging.info(
+            "Oldest SHA-256 verify \(entry.name) \(entry.version): expected=\(expectedSHA), actual=\(actualSHA)",
+            category: "Downloader"
+        )
+
+        guard actualSHA.caseInsensitiveCompare(expectedSHA) == .orderedSame else {
+            throw DownloadFailureReason.verificationFailed(
+                "SHA-256 pliku \(fileURL.lastPathComponent) nie zgadza sie z referencja dla \(entry.name) \(entry.version)"
+            )
+        }
+    }
+
+    private func expectedReferenceChecksumForOldest(entry: MacOSInstallerEntry) throws -> String {
+        let manifest = try loadDownloadChecksumsManifest()
+        let normalizedName = entry.name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedVersion = entry.version.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let match = manifest.systems.first(where: { record in
+            record.family.caseInsensitiveCompare("oldest") == .orderedSame
+                && record.version == normalizedVersion
+                && record.name.lowercased().trimmingCharacters(in: .whitespacesAndNewlines) == normalizedName
+        }) else {
+            throw DownloadFailureReason.verificationFailed(
+                "Brak referencyjnego SHA-256 dla \(entry.name) \(entry.version) w DownloadChecksums.json"
+            )
+        }
+
+        return match.sha256.lowercased()
+    }
+
+    private func loadDownloadChecksumsManifest() throws -> DownloadChecksumsManifest {
+        guard let url = Bundle.main.url(
+            forResource: "DownloadChecksums",
+            withExtension: "json"
+        ) else {
+            throw DownloadFailureReason.verificationFailed(
+                "Nie znaleziono pliku referencyjnego DownloadChecksums.json w bundle aplikacji"
+            )
+        }
+
+        let data = try Data(contentsOf: url)
+        return try JSONDecoder().decode(DownloadChecksumsManifest.self, from: data)
+    }
+
+    private func shouldAllowExpiredApplePackageSignature(for entry: MacOSInstallerEntry) -> Bool {
+        let normalizedName = entry.name.lowercased()
+        guard normalizedName.contains("lion") else {
+            return false
+        }
+        return entry.version.hasPrefix("10.7") || entry.version.hasPrefix("10.8")
+    }
+
+    private func embeddedPackageCandidates(in mountedImageURL: URL) -> [URL] {
+        guard let enumerator = FileManager.default.enumerator(
+            at: mountedImageURL,
+            includingPropertiesForKeys: [.isDirectoryKey, .nameKey],
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            return []
+        }
+
+        var candidates: [URL] = []
+        for case let candidateURL as URL in enumerator {
+            if candidateURL.pathExtension.lowercased() == "pkg" {
+                candidates.append(candidateURL)
+            }
+        }
+
+        return candidates.sorted { lhs, rhs in
+            lhs.path.count < rhs.path.count
+        }
     }
 
     private func verifyIntegrityDataChunklistIfAvailable(

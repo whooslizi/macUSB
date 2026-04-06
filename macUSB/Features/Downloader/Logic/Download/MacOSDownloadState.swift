@@ -98,24 +98,25 @@ final class MontereyDownloadFlowModel: ObservableObject {
     @Published var cleanupWarningMessage: String?
     @Published var networkWarningMessage: String?
 
-    @Published var connectionStatusText: String = "Weryfikuję połączenie z serwerami Apple..."
+    @Published var connectionStatusText: String = "Łączenie z serwerami Apple..."
     @Published var downloadCurrentIndex: Int = 0
     @Published var downloadTotal: Int = 0
-    @Published var downloadFileName: String = "Oczekiwanie na plik..."
+    @Published var downloadFileName: String = "Oczekiwanie..."
     @Published var downloadProgress: Double = 0
     @Published var downloadSpeedText: String = "0.0 MB/s"
     @Published var downloadTransferredText: String = "0.0MB/0.0MB"
     @Published var verifyCurrentIndex: Int = 0
     @Published var verifyTotal: Int = 0
-    @Published var verifyFileName: String = "Oczekiwanie na plik..."
+    @Published var verifyFileName: String = "Oczekiwanie..."
     @Published var verifyProgress: Double = 0
-    @Published var buildStatusText: String = "Przygotowywanie środowiska budowania..."
+    @Published var buildStatusText: String = "Przygotowywanie instalatora..."
     @Published var buildProgress: Double? = nil
     @Published var cleanupStatusText: String = "Przygotowanie czyszczenia..."
     @Published var cleanupProgress: Double = 0
     @Published var summaryTotalDownloadedText: String = "0.0 GB"
     @Published var summaryAverageSpeedText: String = "0.0 MB/s"
     @Published var summaryDurationText: String = "00m 00s"
+    @Published var summaryLocationText: String = "Brak danych"
     @Published var summaryTemporaryFilesText: String = "Brak danych"
     @Published var summaryCreatedFileText: String = "Brak danych"
     @Published var discoveredDownloadItems: [DownloadManifestItem] = []
@@ -191,24 +192,25 @@ final class MontereyDownloadFlowModel: ObservableObject {
         cleanupWarningMessage = nil
         networkWarningMessage = nil
 
-        connectionStatusText = "Weryfikuję połączenie z serwerami Apple..."
+        connectionStatusText = "Łączenie z serwerami Apple..."
         downloadCurrentIndex = 0
         downloadTotal = 0
-        downloadFileName = "Oczekiwanie na plik..."
+        downloadFileName = "Oczekiwanie..."
         downloadProgress = 0
         downloadSpeedText = "0.0 MB/s"
         downloadTransferredText = "0.0MB/0.0MB"
         verifyCurrentIndex = 0
         verifyTotal = 0
-        verifyFileName = "Oczekiwanie na plik..."
+        verifyFileName = "Oczekiwanie..."
         verifyProgress = 0
-        buildStatusText = "Przygotowywanie środowiska budowania..."
+        buildStatusText = "Przygotowywanie instalatora..."
         buildProgress = nil
         cleanupStatusText = "Przygotowanie czyszczenia..."
         cleanupProgress = 0
         summaryTotalDownloadedText = "0.0 GB"
         summaryAverageSpeedText = "0.0 MB/s"
         summaryDurationText = "00m 00s"
+        summaryLocationText = "Brak danych"
         summaryTemporaryFilesText = "Brak danych"
         summaryCreatedFileText = "Brak danych"
         discoveredDownloadItems = []

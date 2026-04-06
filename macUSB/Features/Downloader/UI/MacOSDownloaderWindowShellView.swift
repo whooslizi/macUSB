@@ -16,7 +16,7 @@ struct MacOSDownloaderWindowShellView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: MacUSBDesignTokens.sectionGroupSpacing) {
             VStack(alignment: .leading, spacing: 8) {
-                Text("Menedżer pobierania macOS")
+                Text("Pobieranie systemu macOS")
                     .font(.title3.weight(.semibold))
                 Text(managerDescriptionText)
                     .font(.body)
@@ -46,7 +46,7 @@ struct MacOSDownloaderWindowShellView: View {
                     handleCloseRequest()
                 } label: {
                     HStack {
-                        Text("Zamknij")
+                        Text(closeButtonTitle)
                         Image(systemName: "xmark.circle.fill")
                     }
                     .frame(maxWidth: .infinity)
@@ -83,18 +83,24 @@ struct MacOSDownloaderWindowShellView: View {
         }
     }
 
+    var closeButtonTitle: String {
+        shouldConfirmCloseDuringDownload ? "Anuluj" : "Zamknij"
+    }
+
     var managerDescriptionText: String {
         if activeDownloadEntry == nil {
-            return "Wybierz oficjalny instalator macOS lub OS X dostępny na serwerach Apple"
+            return "Wybierz instalator dostępny na serwerach Apple"
         }
         if downloadFlowModel.isFinished {
-            return "Pobieranie zostało zakończone, a podsumowanie procesu znajdziesz poniżej"
+            return "Pobieranie zakończone. Podsumowanie jest dostępne poniżej"
         }
-        return "Pobieranie i przygotowanie instalatora trwa, a postęp etapów jest widoczny poniżej"
+        return "Trwa pobieranie i przygotowywanie instalatora"
     }
 
     var shouldConfirmCloseDuringDownload: Bool {
-        activeDownloadEntry != nil && !downloadFlowModel.isFinished
+        activeDownloadEntry != nil
+            && !downloadFlowModel.isFinished
+            && downloadFlowModel.workflowState == .running
     }
 
     func handleCloseRequest() {
@@ -150,6 +156,10 @@ struct MacOSDownloaderWindowShellView: View {
     }
 
     func supportsProductionDownload(_ entry: MacOSInstallerEntry) -> Bool {
+        if logic.isOldestDownloadTarget(entry) {
+            return true
+        }
+
         let normalizedName = entry.name.lowercased()
         let major = entry.version.split(separator: ".").first.map(String.init) ?? ""
         let supportedMajors: Set<String> = ["11", "12", "13", "14", "15", "26"]
@@ -227,6 +237,7 @@ struct MacOSDownloaderWindowShellView: View {
         )
         UNUserNotificationCenter.current().add(request, withCompletionHandler: nil)
     }
+
 }
 
 private struct MacOSDownloaderOptionsSheetView: View {

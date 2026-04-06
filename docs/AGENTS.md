@@ -142,7 +142,7 @@ Use this sequence unless the user explicitly requests a narrower scope that does
 3. Implement the required change.
 4. Validate behavior (project policy in this file applies).
 5. Update documentation in `docs/reference/` when behavior, contracts, or workflows changed.
-6. Update release notes in `docs/CHANGELOG.md` when the change is user-facing and release-relevant.
+6. Update release notes in `docs/CHANGELOG.md` only when the user explicitly asks for changelog edits.
 7. Prepare commit message and commit scope according to commit rules in this file.
 
 ## Definition of done
@@ -153,7 +153,7 @@ A change is done when all applicable conditions are met:
 - Requested behavior is implemented.
 - Validation was run (or explicitly reported if not possible).
 - relevant file(s) in `docs/reference/` reflect current behavior when relevant.
-- `docs/CHANGELOG.md` is updated when release-relevant.
+- `docs/CHANGELOG.md` is updated only when the user explicitly asks for changelog edits.
 - No stale documentation links remain.
 - Commit content and message follow this file.
 
@@ -181,7 +181,7 @@ Use these rules to decide required documentation updates:
 - Code or runtime behavior changed:
   - update relevant file(s) from `docs/reference/README.md`.
 - User-facing behavior changed and should appear in release notes:
-  - update `docs/CHANGELOG.md`.
+  - update `docs/CHANGELOG.md` only when the user explicitly asks for changelog edits.
 - Internal-only refactor with no user-facing impact:
   - changelog update is optional.
 - Documentation-only change:
@@ -210,7 +210,7 @@ Minor helper changes that do not alter behavior may proceed, but must still be r
 ## Documentation hygiene
 
 - If runtime behavior changed, update relevant file(s) from `docs/reference/README.md`.
-- If release-relevant user-facing behavior changed, update `docs/CHANGELOG.md`.
+- If release-relevant user-facing behavior changed, update `docs/CHANGELOG.md` only when the user explicitly asks for changelog edits.
 - Keep process rules only in `docs/AGENTS.md`.
 - Keep app behavior and technical reference only in `docs/reference/`.
 - Avoid duplicating the same rule in multiple files.
@@ -344,6 +344,9 @@ When branch creation is requested:
 
 - `CHANGELOG.md` should contain release entries only (no writing instructions).
 - Write changelogs in English.
+- `CHANGELOG.md` must never be edited automatically.
+- Changelog edits are allowed only on explicit user request.
+- Before applying changelog edits, present the proposed changelog text to the user for approval.
 - Verify each entry against shipped behavior and relevant runtime reference files from `docs/reference/README.md`.
 - Keep wording concise and suitable for GitHub Releases.
 - Changes with only marginal product impact do not have to be listed in a release entry.

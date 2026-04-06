@@ -36,6 +36,7 @@ Downloader provides:
 
 Current production scope:
 - full download pipeline is enabled for selected Catalina, Big Sur, Monterey, Ventura, Sonoma, Sequoia, and Tahoe entries,
+- full download pipeline is enabled for Sierra and older official Apple Support installers distributed as `.dmg`,
 - discovery includes broad Apple-official stable entries across families.
 
 ---
@@ -112,11 +113,12 @@ Discovery UX contract:
 
 ---
 
-## 6. Production Download Flow (Catalina to Tahoe)
+## 6. Production Download Flow (Sierra and Older + Catalina to Tahoe)
 
 Production pipeline (`MontereyDownloadFlowModel`) uses two compatible distribution modes:
 - `Modern`: Big Sur, Monterey, Ventura, Sonoma, Sequoia, Tahoe (`InstallAssistant.pkg -> .app`).
 - `Legacy`: High Sierra, Mojave, Catalina (`InstallAssistantAuto.pkg` + `RecoveryHDMetaDmg.pkg` + `InstallESDDmg.pkg`).
+- `Oldest`: Sierra and older Apple Support downloads (`.dmg -> .pkg -> .app`).
 
 Both modes share the same staged UI and runtime skeleton:
 1. Connection / preflight
@@ -133,6 +135,7 @@ Both modes share the same staged UI and runtime skeleton:
 4. Installer build and move
   - `Legacy`: in-app assembly (without root) using `pkgutil --expand-full` + `hdiutil attach` and SharedSupport composition,
   - `Modern`: helper-based `InstallAssistant.pkg -> .app`,
+  - `Oldest`: mount `.dmg`, extract installer `.pkg`, expand package (`pkgutil --expand`), extract `Payload` (`cpio` with compression fallback), and move final `.app` to `/Applications`,
   - final installer is placed in `/Applications`.
 5. Final cleanup
   - dedicated helper-side cleanup of session temp directory,
@@ -140,7 +143,8 @@ Both modes share the same staged UI and runtime skeleton:
 
 Summary:
 - shows transfer, average speed, duration, and output file name,
-- exposes Finder shortcut to destination folder.
+- exposes Finder shortcut to destination folder,
+- includes destination path and temporary-files cleanup status in dedicated summary rows.
 
 ---
 
@@ -148,9 +152,17 @@ Summary:
 
 Per-file verification order:
 1. local presence and exact size check,
-2. IntegrityData chunklist validation (`SHA-256` per chunk) when available,
-3. digest fallback from manifest metadata if needed,
-4. package signature check (`pkgutil`) fallback for package-specific mismatch cases.
+2. for `Oldest` (`10.7` to `10.12`) `.dmg` payloads: verify reference SHA-256 from `DownloadChecksums.json`,
+3. for `Oldest` (`10.7` to `10.12`) `.dmg` payloads: mount image and verify embedded `.pkg` signature (`pkgutil --check-signature`),
+4. IntegrityData chunklist validation (`SHA-256` per chunk) when available,
+5. digest fallback from manifest metadata if needed,
+6. package signature check (`pkgutil`) fallback for package-specific mismatch cases.
+
+`Oldest` specific rule:
+- for `.dmg` installers in `10.7` to `10.12`, the verification flow intentionally stops after reference SHA-256 and embedded package-signature validation (no IntegrityData or digest fallback checks).
+
+Legacy exception:
+- for OS X Lion (10.7) and OS X Mountain Lion (10.8), expired-but-Apple-signed package certificates are accepted for `.dmg` embedded installer packages.
 
 Final installer verification:
 - non-blocking code-signature check (`codesign`) for diagnostics,
@@ -201,7 +213,9 @@ Process screen:
 - active download stage shows:
   - percent above progress bar,
   - speed label and transfer,
-  - inline manifest file list with status icons.
+  - inline manifest file list with status icons,
+  - verification stage text in state form (`Weryfikowanie pliku …`).
+- close confirmation alert is shown only during active running download; summary close action is immediate.
 
 Summary screen:
 - success / partial / failure card tones,

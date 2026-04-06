@@ -5,6 +5,7 @@ extension MontereyDownloadFlowModel {
     private enum InstallerDistributionWorkflow: String {
         case modern = "Modern"
         case legacy = "Legacy"
+        case oldestDiskImage = "OldestDiskImage"
     }
 
     func runInstallerBuild(
@@ -12,7 +13,7 @@ extension MontereyDownloadFlowModel {
         entry: MacOSInstallerEntry
     ) async throws {
         currentStage = .buildingInstaller
-        buildStatusText = "Przygotowuję budowanie instalatora..."
+        buildStatusText = "Przygotowywanie instalatora..."
         buildProgress = 0
 
         let assemblySelection = try resolveAssemblyInput(in: manifest)
@@ -29,48 +30,16 @@ extension MontereyDownloadFlowModel {
                 manifest: manifest,
                 entry: entry
             )
-        case .modern:
-            guard let outputDirectory = activeSessionOutputURL else {
-                throw DownloadFailureReason.assemblyFailed("Brak katalogu output sesji")
-            }
-            let request = DownloaderAssemblyRequestPayload(
-                packagePath: assemblySelection.inputURL.path,
-                outputDirectoryPath: outputDirectory.path,
-                expectedAppName: expectedInstallerAppName(for: entry),
-                finalDestinationDirectoryPath: "",
-                cleanupSessionFiles: false,
-                requesterUID: getuid(),
-                patchLegacyDistributionInDebug: false
+        case .oldestDiskImage:
+            finalAppURL = try await runOldestDiskImageAssemblyWithoutRoot(
+                diskImageURL: assemblySelection.inputURL,
+                entry: entry
             )
-            cleanupDelegatedToHelper = request.cleanupSessionFiles
-
-            let result = try await startAssemblyWithHelper(request: request)
-            if result.cleanupRequested && result.cleanupSucceeded {
-                sessionCleanupHandledByHelper = true
-                helperCleanupFailureMessage = nil
-                activeSessionRootURL = nil
-                activeSessionPayloadURL = nil
-                activeSessionOutputURL = nil
-            } else if result.cleanupRequested {
-                sessionCleanupHandledByHelper = false
-                helperCleanupFailureMessage = result.cleanupErrorMessage
-            } else {
-                sessionCleanupHandledByHelper = false
-                helperCleanupFailureMessage = nil
-            }
-
-            guard result.success else {
-                throw DownloadFailureReason.assemblyFailed(result.errorMessage ?? "Helper zwrocil blad assembly")
-            }
-            guard let outputAppPath = result.outputAppPath else {
-                throw DownloadFailureReason.assemblyFailed("Helper nie zwrocil sciezki do instalatora .app")
-            }
-
-            let producedURL = URL(fileURLWithPath: outputAppPath)
-            guard FileManager.default.fileExists(atPath: producedURL.path) else {
-                throw DownloadFailureReason.assemblyFailed("Zbudowana aplikacja instalatora nie istnieje")
-            }
-            finalAppURL = producedURL
+        case .modern:
+            finalAppURL = try await runPackageAssemblyWithHelper(
+                packageURL: assemblySelection.inputURL,
+                entry: entry
+            )
         }
 
         finalInstallerAppURL = finalAppURL
@@ -79,7 +48,7 @@ extension MontereyDownloadFlowModel {
             expectedBuild: entry.build,
             expectedVersion: entry.version
         )
-        buildStatusText = "Instalator .app został zbudowany w /Applications..."
+        buildStatusText = "Instalator został przygotowany"
         buildProgress = 1.0
         completedStages.insert(.buildingInstaller)
 
@@ -87,6 +56,53 @@ extension MontereyDownloadFlowModel {
             "Assembly success destination=\(finalAppURL.path)",
             category: "Downloader"
         )
+    }
+
+    func runPackageAssemblyWithHelper(
+        packageURL: URL,
+        entry: MacOSInstallerEntry
+    ) async throws -> URL {
+        guard let outputDirectory = activeSessionOutputURL else {
+            throw DownloadFailureReason.assemblyFailed("Brak katalogu output sesji")
+        }
+        let request = DownloaderAssemblyRequestPayload(
+            packagePath: packageURL.path,
+            outputDirectoryPath: outputDirectory.path,
+            expectedAppName: expectedInstallerAppName(for: entry),
+            finalDestinationDirectoryPath: "",
+            cleanupSessionFiles: false,
+            requesterUID: getuid(),
+            patchLegacyDistributionInDebug: false
+        )
+        cleanupDelegatedToHelper = request.cleanupSessionFiles
+
+        let result = try await startAssemblyWithHelper(request: request)
+        if result.cleanupRequested && result.cleanupSucceeded {
+            sessionCleanupHandledByHelper = true
+            helperCleanupFailureMessage = nil
+            activeSessionRootURL = nil
+            activeSessionPayloadURL = nil
+            activeSessionOutputURL = nil
+        } else if result.cleanupRequested {
+            sessionCleanupHandledByHelper = false
+            helperCleanupFailureMessage = result.cleanupErrorMessage
+        } else {
+            sessionCleanupHandledByHelper = false
+            helperCleanupFailureMessage = nil
+        }
+
+        guard result.success else {
+            throw DownloadFailureReason.assemblyFailed(result.errorMessage ?? "Helper zwrocil blad assembly")
+        }
+        guard let outputAppPath = result.outputAppPath else {
+            throw DownloadFailureReason.assemblyFailed("Helper nie zwrocil sciezki do instalatora .app")
+        }
+
+        let producedURL = URL(fileURLWithPath: outputAppPath)
+        guard FileManager.default.fileExists(atPath: producedURL.path) else {
+            throw DownloadFailureReason.assemblyFailed("Zbudowana aplikacja instalatora nie istnieje")
+        }
+        return producedURL
     }
 
     func expectedInstallerAppName(for entry: MacOSInstallerEntry) -> String {
@@ -122,8 +138,18 @@ extension MontereyDownloadFlowModel {
             return (url, .modern)
         }
 
+        if let oldestDiskImageItem = manifest.items.first(where: { item in
+            item.url.pathExtension.caseInsensitiveCompare("dmg") == .orderedSame
+                || item.name.lowercased().hasSuffix(".dmg")
+        }) {
+            guard let url = downloadedFileURLsByItemID[oldestDiskImageItem.id] else {
+                throw DownloadFailureReason.assemblyFailed("Nie znaleziono pobranego obrazu .dmg")
+            }
+            return (url, .oldestDiskImage)
+        }
+
         throw DownloadFailureReason.assemblyFailed(
-            "Nie znaleziono pakietu instalatora dla wybranego systemu (wymagany InstallAssistant.pkg lub InstallAssistantAuto.pkg)"
+            "Nie znaleziono pliku instalatora dla wybranego systemu (wymagany InstallAssistant.pkg, InstallAssistantAuto.pkg lub obraz .dmg)"
         )
     }
 }

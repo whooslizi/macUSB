@@ -24,7 +24,7 @@ extension MontereyDownloadFlowModel {
                     let recovered = try await waitForInternetReconnect(timeoutSeconds: internetReconnectTimeoutSeconds, probeURL: item.url)
                     if recovered {
                         networkWarningMessage = nil
-                        downloadFileName = "Pobieranie \(item.name)..."
+                        downloadFileName = "Pobieranie pliku \(item.name)..."
                         AppLogging.info(
                             "Polaczenie internetowe przywrocone. Wznawiam pobieranie \(item.name).",
                             category: "Downloader"

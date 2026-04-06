@@ -1765,9 +1765,6 @@
     "Analiza listy plików i metadanych..." : {
 
     },
-    "Analiza metadanych wersji..." : {
-
-    },
     "Analiza nie została wykonana - wybór użytkownika" : {
       "localizations" : {
         "de" : {
@@ -1919,6 +1916,9 @@
           }
         }
       }
+    },
+    "Analizowanie metadanych wersji..." : {
+
     },
     "Analizuj" : {
       "localizations" : {
@@ -2626,7 +2626,7 @@
         }
       }
     },
-    "Brak dostępnych wersji" : {
+    "Brak dostępnych systemów" : {
 
     },
     "Brak połączenia XPC z helperem" : {
@@ -3725,7 +3725,7 @@
         }
       }
     },
-    "Dołączanie starszych wersji z Apple Support..." : {
+    "Dołączanie starszych wersji..." : {
 
     },
     "Dostępna aktualizacja!" : {
@@ -3879,6 +3879,9 @@
           }
         }
       }
+    },
+    "Dostępne systemy" : {
+
     },
     "Działanie przerwane przez użytkownika. Możesz zacząć od początku." : {
       "localizations" : {
@@ -7712,13 +7715,7 @@
         }
       }
     },
-    "Łączę się z serwerami Apple i wykrywam dostępne instalatory..." : {
-
-    },
     "Łączenie z serwerami Apple..." : {
-
-    },
-    "Lista systemów dostępnych do pobrania" : {
 
     },
     "Lokalizacja aplikacji: /Applications (OK)" : {
@@ -8342,12 +8339,6 @@
           }
         }
       }
-    },
-    "Menedżer pobierania macOS" : {
-
-    },
-    "Menedżer pobierania systemów macOS" : {
-
     },
     "Można bezpiecznie przejść do ponownej rejestracji" : {
 
@@ -9585,7 +9576,10 @@
         }
       }
     },
-    "Nie udało się pobrać listy" : {
+    "Nie udało się pobrać listy systemów" : {
+
+    },
+    "Nie udało się ukończyć" : {
 
     },
     "Nie udało się usunąć plików tymczasowych: %@" : {
@@ -10609,6 +10603,9 @@
         }
       }
     },
+    "Nie znaleziono instalatorów w aktualnym katalogu Apple" : {
+
+    },
     "Nie znaleziono pliku InstallESD.dmg." : {
       "localizations" : {
         "de" : {
@@ -10684,9 +10681,6 @@
           }
         }
       }
-    },
-    "Nie znaleziono publicznych instalatorów w aktualnym katalogu Apple." : {
-
     },
     "Nie znaleziono źródłowego pliku obrazu." : {
       "localizations" : {
@@ -11852,9 +11846,6 @@
         }
       }
     },
-    "Otwórz downloader ponownie, aby uruchomić nowe sprawdzanie." : {
-
-    },
     "Otwórz macUSB_temp" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -12014,6 +12005,9 @@
         }
       }
     },
+    "Otwórz okno ponownie, aby rozpocząć wyszukiwanie" : {
+
+    },
     "Otworzono Ustawienia systemowe" : {
       "localizations" : {
         "de" : {
@@ -12115,16 +12109,10 @@
         }
       }
     },
-    "Pobieranie ukończone" : {
+    "Pobieranie systemu macOS" : {
 
     },
     "Pobieranie zakończone" : {
-
-    },
-    "Pobieranie zakończone błędem" : {
-
-    },
-    "Pobieranie zakończone częściowo" : {
 
     },
     "Pobierz" : {
@@ -14572,6 +14560,9 @@
         }
       }
     },
+    "Przygotowanie manifestu dla najstarszego systemu..." : {
+
+    },
     "Przygotowanie..." : {
       "extractionState" : "stale",
       "localizations" : {
@@ -15278,9 +15269,6 @@
     "Sprawdzam, czy helper odpowiada poprawnie przez XPC" : {
 
     },
-    "Sprawdzanie anulowane" : {
-
-    },
     "Sprawdzanie rozmiarów instalatorów..." : {
 
     },
@@ -15359,9 +15347,6 @@
           }
         }
       }
-    },
-    "Sprawdzanie wersji macOS" : {
-
     },
     "Spróbuj ponownie od początku" : {
       "localizations" : {
@@ -15515,6 +15500,9 @@
         }
       }
     },
+    "Status" : {
+
+    },
     "Status helpera" : {
       "localizations" : {
         "de" : {
@@ -15592,9 +15580,6 @@
       }
     },
     "Status jest aktualizowany na bieżąco" : {
-
-    },
-    "Status procesu" : {
 
     },
     "Status usługi: %@" : {
@@ -15910,7 +15895,7 @@
         }
       }
     },
-    "Szczegóły błędu" : {
+    "Szczegóły" : {
 
     },
     "Szczegóły operacji" : {
@@ -17388,6 +17373,9 @@
           }
         }
       }
+    },
+    "Ukończono częściowo" : {
+
     },
     "Ukończono w %02dm %02ds" : {
       "localizations" : {
@@ -21024,7 +21012,7 @@
         }
       }
     },
-    "Wystąpił błąd połączenia z serwerami Apple." : {
+    "Wystąpił problem z połączeniem z serwerami Apple" : {
 
     },
     "Wyświetl szczegóły" : {
@@ -21102,6 +21090,15 @@
           }
         }
       }
+    },
+    "Wyszukiwanie anulowane" : {
+
+    },
+    "Wyszukiwanie dostępnych systemów" : {
+
+    },
+    "Wyszukiwanie instalatorów na serwerach Apple..." : {
+
     },
     "XPC health: %@" : {
       "localizations" : {

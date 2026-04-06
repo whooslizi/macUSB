@@ -87,14 +87,14 @@ extension DownloaderAssemblyExecutor {
         let installerEnvironment = ProcessInfo.processInfo.environment.merging(["CM_BUILD": "CM_BUILD"]) { current, _ in current }
         emit(
             percent: 0.15,
-            status: "Instalacja dystrybucji \(assemblyPackageName)",
+            status: "Instalowanie składników systemu...",
             logLine: "legacy-assembly installer start dist=\(effectiveDistributionURL.path) target=\(mountURL.path)"
         )
 
         try runInstallerProcess(
             installerInputURL: effectiveDistributionURL,
             targetPath: mountURL.path,
-            statusText: "Instalacja dystrybucji \(assemblyPackageName)",
+            statusText: "Instalowanie składników systemu...",
             environment: installerEnvironment
         )
 
@@ -114,7 +114,7 @@ extension DownloaderAssemblyExecutor {
 
         emit(
             percent: 0.90,
-            status: "Kopiowanie instalatora do /Applications",
+            status: "Kończenie przygotowania instalatora...",
             logLine: "legacy-assembly copy app source=\(mountedInstallerURL.path) destination=\(destinationURL.path)"
         )
         try runCommand(
@@ -124,7 +124,7 @@ extension DownloaderAssemblyExecutor {
 
         emit(
             percent: 0.94,
-            status: "Instalator legacy gotowy w /Applications",
+            status: "Instalator gotowy",
             logLine: "legacy-assembly copy success destination=\(destinationURL.path)"
         )
         return destinationURL
@@ -148,13 +148,13 @@ extension DownloaderAssemblyExecutor {
         if text == String(data: data, encoding: .utf8) {
             emit(
                 percent: nil,
-                status: "Instalacja dystrybucji \(assemblyPackageName)",
+                status: "Instalowanie składników systemu...",
                 logLine: "legacy-dist patch: brak zmian w tresci (pattern not matched) source=\(originalDistributionURL.path)"
             )
         } else {
             emit(
                 percent: nil,
-                status: "Instalacja dystrybucji \(assemblyPackageName)",
+                status: "Instalowanie składników systemu...",
                 logLine: "legacy-dist patch: zastosowano modyfikacje zgodnosci source=\(originalDistributionURL.path) chars_before=\(originalLength) chars_after=\(text.count)"
             )
         }
@@ -180,7 +180,7 @@ extension DownloaderAssemblyExecutor {
         try patchedData.write(to: patchedURL, options: .atomic)
         emit(
             percent: nil,
-            status: "Instalacja dystrybucji \(assemblyPackageName)",
+            status: "Instalowanie składników systemu...",
             logLine: "legacy-dist patch: backup original=\(backupOriginalURL.path) patched-in-place=\(patchedURL.path)"
         )
         return patchedURL
@@ -220,7 +220,7 @@ extension DownloaderAssemblyExecutor {
             environment = ProcessInfo.processInfo.environment.merging(["CM_BUILD": "CM_BUILD"]) { current, _ in current }
             emit(
                 percent: nil,
-                status: "Instalacja pakietu \(assemblyPackageName)",
+                status: "Instalowanie składników systemu...",
                 logLine: "legacy-assembly compatibility: ustawiono CM_BUILD dla \(packageURL.lastPathComponent)"
             )
         } else {
@@ -230,7 +230,7 @@ extension DownloaderAssemblyExecutor {
         try runInstallerProcess(
             installerInputURL: packageURL,
             targetPath: "/",
-            statusText: "Instalacja pakietu \(assemblyPackageName)",
+            statusText: "Instalowanie składników systemu...",
             environment: environment
         )
 
@@ -238,7 +238,7 @@ extension DownloaderAssemblyExecutor {
             throw NSError(
                 domain: "macUSBHelper",
                 code: 404,
-                userInfo: [NSLocalizedDescriptionKey: "Nie znaleziono zbudowanej aplikacji instalatora w /Applications."]
+                userInfo: [NSLocalizedDescriptionKey: "Nie znaleziono zbudowanej aplikacji instalatora."]
             )
         }
 
@@ -396,7 +396,7 @@ extension DownloaderAssemblyExecutor {
     func emitInstallerLine(_ rawLine: String, statusText: String? = nil) {
         let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !line.isEmpty else { return }
-        let resolvedStatusText = statusText ?? "Instalacja pakietu \(assemblyPackageName)"
+        let resolvedStatusText = statusText ?? "Instalowanie składników systemu..."
 
         if let percent = parseInstallerPercent(from: line) {
             let normalized = min(max(percent / 100.0, 0), 1)

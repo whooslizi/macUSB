@@ -40,11 +40,31 @@ extension MacOSCatalogService {
         ]
 
         static let legacySupportMap: [LegacySupportEntry] = [
-            LegacySupportEntry(label: "Sierra 10.12", name: "macOS Sierra", version: "10.12.6"),
-            LegacySupportEntry(label: "El Capitan 10.11", name: "OS X El Capitan", version: "10.11.6"),
-            LegacySupportEntry(label: "Yosemite 10.10", name: "OS X Yosemite", version: "10.10.5"),
-            LegacySupportEntry(label: "Mountain Lion 10.8", name: "OS X Mountain Lion", version: "10.8.5"),
-            LegacySupportEntry(label: "Lion 10.7", name: "Mac OS X Lion", version: "10.7.5")
+            LegacySupportEntry(
+                label: "Sierra 10.12",
+                name: "macOS Sierra",
+                version: "10.12.6"
+            ),
+            LegacySupportEntry(
+                label: "El Capitan 10.11",
+                name: "OS X El Capitan",
+                version: "10.11.6"
+            ),
+            LegacySupportEntry(
+                label: "Yosemite 10.10",
+                name: "OS X Yosemite",
+                version: "10.10.5"
+            ),
+            LegacySupportEntry(
+                label: "Mountain Lion 10.8",
+                name: "OS X Mountain Lion",
+                version: "10.8.5"
+            ),
+            LegacySupportEntry(
+                label: "Lion 10.7",
+                name: "Mac OS X Lion",
+                version: "10.7.5"
+            )
         ]
 
         static let legacyAssemblyRequiredPackageIdentifiers: [String] = [

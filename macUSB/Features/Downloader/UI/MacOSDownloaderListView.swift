@@ -5,7 +5,7 @@ extension MacOSDownloaderWindowShellView {
     var installerSelectionSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center, spacing: 10) {
-                Text("Lista systemów dostępnych do pobrania")
+                Text("Dostępne systemy")
                     .font(.headline)
 
                 Spacer()
@@ -62,22 +62,22 @@ extension MacOSDownloaderWindowShellView {
         case .cancelled:
             if logic.familyGroups.isEmpty {
                 listMessageView(
-                    title: String(localized: "Sprawdzanie anulowane"),
-                    description: String(localized: "Otwórz downloader ponownie, aby uruchomić nowe sprawdzanie.")
+                    title: String(localized: "Wyszukiwanie anulowane"),
+                    description: String(localized: "Otwórz okno ponownie, aby rozpocząć wyszukiwanie")
                 )
             } else {
                 installerSectionsView
             }
         case .failed:
             listMessageView(
-                title: String(localized: "Nie udało się pobrać listy"),
-                description: logic.errorText ?? String(localized: "Wystąpił błąd połączenia z serwerami Apple.")
+                title: String(localized: "Nie udało się pobrać listy systemów"),
+                description: logic.errorText ?? String(localized: "Wystąpił problem z połączeniem z serwerami Apple")
             )
         case .loaded:
             if logic.familyGroups.isEmpty {
                 listMessageView(
-                    title: String(localized: "Brak dostępnych wersji"),
-                    description: String(localized: "Nie znaleziono publicznych instalatorów w aktualnym katalogu Apple.")
+                    title: String(localized: "Brak dostępnych systemów"),
+                    description: String(localized: "Nie znaleziono instalatorów w aktualnym katalogu Apple")
                 )
             } else {
                 installerSectionsView
@@ -96,9 +96,9 @@ extension MacOSDownloaderWindowShellView {
                     .cornerRadius(9)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Sprawdzanie wersji macOS")
+                    Text("Wyszukiwanie dostępnych systemów")
                         .font(.headline)
-                    Text("Łączę się z serwerami Apple i wykrywam dostępne instalatory...")
+                    Text("Wyszukiwanie instalatorów na serwerach Apple...")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

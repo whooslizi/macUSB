@@ -1,6 +1,26 @@
 import Foundation
 
 extension MacOSCatalogService {
+    func isOldestInstallerTarget(_ entry: MacOSInstallerEntry) -> Bool {
+        guard entry.catalogProductID == nil else {
+            return false
+        }
+        guard entry.sourceURL.pathExtension.lowercased() == "dmg" else {
+            return false
+        }
+
+        let versionParts = entry.version.split(separator: ".")
+        guard let majorPart = versionParts.first, let major = Int(majorPart) else {
+            return false
+        }
+        guard major == 10 else {
+            return false
+        }
+
+        let minor = versionParts.dropFirst().first.flatMap { Int($0) } ?? -1
+        return minor >= 7 && minor <= 12
+    }
+
     func isLegacyAssemblyTarget(_ entry: MacOSInstallerEntry) -> Bool {
         let normalized = entry.name.lowercased()
         if normalized.contains("catalina"), entry.version.hasPrefix("10.15") {
@@ -47,6 +67,28 @@ extension MacOSCatalogService {
         }
 
         return filtered
+    }
+
+    func filterModernAssemblyDescriptors(_ descriptors: [CatalogPackageDescriptor]) -> [CatalogPackageDescriptor] {
+        let installAssistantDescriptors = descriptors.filter { descriptor in
+            let packageID = descriptor.packageIdentifier?.lowercased() ?? ""
+            let fileName = descriptor.url.lastPathComponent.lowercased()
+            return fileName == "installassistant.pkg"
+                || descriptor.name.lowercased() == "installassistant.pkg"
+                || packageID.contains("installassistant")
+        }
+
+        guard !installAssistantDescriptors.isEmpty else {
+            return descriptors
+        }
+
+        // Modern workflow should use a single InstallAssistant package in the download list.
+        if let exactFileName = installAssistantDescriptors.first(where: {
+            $0.url.lastPathComponent.caseInsensitiveCompare("InstallAssistant.pkg") == .orderedSame
+        }) {
+            return [exactFileName]
+        }
+        return [installAssistantDescriptors[0]]
     }
 
     func deduplicated(_ entries: [MacOSInstallerEntry]) -> [MacOSInstallerEntry] {
