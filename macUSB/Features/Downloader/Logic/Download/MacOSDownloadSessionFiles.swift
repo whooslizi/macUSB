@@ -3,14 +3,15 @@ import Foundation
 extension MontereyDownloadFlowModel {
     func verifyTemporaryDiskCapacity(requiredBytes: Int64) throws {
         let probeURL = FileManager.default.temporaryDirectory
-        let reserveBytes: Int64 = max(2_000_000_000, Int64(Double(requiredBytes) * 0.10))
-        let minimumRequired = requiredBytes + reserveBytes
+        let minimumRequired = Int64((Double(requiredBytes) * 2.5).rounded(.up))
 
         let values = try probeURL.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
         let availableBytes = Int64(values.volumeAvailableCapacityForImportantUsage ?? 0)
         guard availableBytes >= minimumRequired else {
-            throw DownloadFailureReason.sessionInitializationFailed(
-                "Brak wolnego miejsca: wymagane \(DownloadManifestItem.formatBytes(minimumRequired)), dostepne \(DownloadManifestItem.formatBytes(availableBytes))."
+            throw DownloadFailureReason.insufficientDiskSpace(
+                requiredMinimumBytes: minimumRequired,
+                availableBytes: availableBytes,
+                installerBytes: requiredBytes
             )
         }
     }

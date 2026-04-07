@@ -77,6 +77,11 @@ struct MacOSDownloaderWindowShellView: View {
             else { return }
             sendDownloadCompletionNotificationIfInactive(for: activeDownloadEntry)
         }
+        .onChange(of: downloadFlowModel.pendingDiskSpaceAlert) {
+            guard let context = downloadFlowModel.pendingDiskSpaceAlert else { return }
+            presentInsufficientDiskSpaceAlert(context: context)
+            downloadFlowModel.pendingDiskSpaceAlert = nil
+        }
         .onDisappear {
             logic.cancelDiscovery(updateState: false)
             downloadFlowModel.stop()
@@ -142,6 +147,21 @@ struct MacOSDownloaderWindowShellView: View {
         alert.addButton(withTitle: String(localized: "Kontynuuj pobieranie"))
         alert.addButton(withTitle: String(localized: "Anuluj pobieranie i zamknij"))
         return alert.runModal() == .alertSecondButtonReturn
+    }
+
+    func presentInsufficientDiskSpaceAlert(context: DiskSpaceAlertContext) {
+        let alert = NSAlert()
+        alert.icon = NSApp.applicationIconImage
+        alert.alertStyle = .warning
+        alert.messageText = String(localized: "Za mało miejsca na dysku")
+        alert.informativeText = String(
+            format: String(localized: "Aby rozpocząć pobieranie, potrzebujesz więcej wolnego miejsca na dysku.\n\nWymagane minimum: %@. Dostępne: %@.\n\nZwolnij miejsce i spróbuj ponownie."),
+            context.requiredMinimumText,
+            context.availableText
+        )
+        alert.addButton(withTitle: String(localized: "OK"))
+        alert.runModal()
+        handleCloseRequest()
     }
 
     func ensureSelectedEntryIsVisible() {

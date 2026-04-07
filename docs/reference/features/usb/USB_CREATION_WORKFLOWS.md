@@ -19,6 +19,12 @@ Workflow selection must respect analyzed compatibility flags.
 - No terminal fallback privileged execution path.
 - Stage progression shown in UI must remain deterministic.
 
+## Power Management Invariant
+
+- Idle sleep is blocked for the full USB creation runtime.
+- Sleep blocker is activated at creation process start.
+- Sleep blocker is released on every terminal path: success, failure, and cancellation.
+
 ## Logging and Diagnostics
 
 Creation workflow logs should include:

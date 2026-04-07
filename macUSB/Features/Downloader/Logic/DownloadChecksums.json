@@ -3,6 +3,25 @@
   "description": "Reference SHA-256 checksums for downloadable macOS/OS X installers",
   "systems": [
     {
+      "family": "legacy",
+      "name": "macOS High Sierra",
+      "version": "10.13.6",
+      "files": [
+        {
+          "name": "InstallAssistantAuto.pkg",
+          "sha256": "a06df157a8474cb518a360b812ec68e405e24bf64e2a1106820da80f7e067c8f"
+        },
+        {
+          "name": "RecoveryHDMetaDmg.pkg",
+          "sha256": "db948a49ff4022daf924a1c1a7b1ded2e84f8bc993c19ee21a946ef1361cf7c2"
+        },
+        {
+          "name": "InstallESDDmg.pkg",
+          "sha256": "f922284fc560d34eca84752ae9c030d2c37ff00115ed87b32baaf78d98ebb1bf"
+        }
+      ]
+    },
+    {
       "family": "oldest",
       "name": "macOS Sierra",
       "version": "10.12.6",

@@ -51,7 +51,8 @@ extension MacOSDownloaderWindowShellView {
                             }
                         }
 
-                        if let failureMessage = downloadFlowModel.failureMessage,
+                        if !downloadFlowModel.suppressInlineFailureMessage,
+                           let failureMessage = downloadFlowModel.failureMessage,
                            !failureMessage.isEmpty {
                             StatusCard(tone: .warning, density: .compact) {
                                 VStack(alignment: .leading, spacing: 4) {
@@ -109,7 +110,7 @@ extension MacOSDownloaderWindowShellView {
         case .pending:
             StatusCard(tone: .subtle, density: .compact) {
                 HStack(spacing: 12) {
-                    Image(systemName: iconForDownloadStage(stage, stageState: stageState))
+                    Image(systemName: pendingIconForDownloadStage(stage))
                         .font(.title3)
                         .foregroundStyle(.secondary)
                         .frame(width: 24)
@@ -123,7 +124,7 @@ extension MacOSDownloaderWindowShellView {
         case .active:
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 12) {
-                    Image(systemName: iconForDownloadStage(stage, stageState: stageState))
+                    Image(systemName: activeIconForDownloadStage(stage))
                         .font(.title3)
                         .foregroundColor(.accentColor)
                         .frame(width: 24)
@@ -194,35 +195,34 @@ extension MacOSDownloaderWindowShellView {
         }
     }
 
-    func iconForDownloadStage(_ stage: MontereyDownloadFlowStage, stageState: DownloadStageVisualState) -> String {
+    func pendingIconForDownloadStage(_ stage: MontereyDownloadFlowStage) -> String {
+        switch stage {
+        case .connection:
+            return "network"
+        case .downloading:
+            return "arrow.down.circle"
+        case .verifying:
+            return "checkmark.shield"
+        case .buildingInstaller:
+            return "shippingbox"
+        case .cleanup:
+            return "checkmark.circle"
+        }
+    }
+
+    func activeIconForDownloadStage(_ stage: MontereyDownloadFlowStage) -> String {
         switch stage {
         case .connection:
             return "network"
         case .downloading:
             return "arrow.down.circle.fill"
         case .verifying:
-            if shouldUseFilledActiveIconsForLegacyAndOldest(), stageState == .active {
-                return "checkmark.shield.fill"
-            }
-            return "checkmark.shield"
+            return "checkmark.shield.fill"
         case .buildingInstaller:
-            if shouldUseFilledActiveIconsForLegacyAndOldest() {
-                return stageState == .active ? "shippingbox.fill" : "shippingbox"
-            }
-            return "wand.and.stars"
+            return "shippingbox.fill"
         case .cleanup:
-            if shouldUseFilledActiveIconsForLegacyAndOldest(), stageState == .active {
-                return "checkmark.circle.fill"
-            }
-            return "checkmark.circle"
+            return "checkmark.circle.fill"
         }
-    }
-
-    private func shouldUseFilledActiveIconsForLegacyAndOldest() -> Bool {
-        guard let entry = activeDownloadEntry else {
-            return false
-        }
-        return logic.isLegacyAssemblyTarget(entry) || logic.isOldestDownloadTarget(entry)
     }
 
     func downloadStageTitle(for stage: MontereyDownloadFlowStage) -> String {

@@ -1382,6 +1382,16 @@
         }
       }
     },
+    "Aby rozpocząć pobieranie, potrzebujesz więcej wolnego miejsca na dysku.\n\nWymagane minimum: %@. Dostępne: %@.\n\nZwolnij miejsce i spróbuj ponownie." : {
+      "localizations" : {
+        "pl" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Aby rozpocząć pobieranie, potrzebujesz więcej wolnego miejsca na dysku.\n\nWymagane minimum: %1$@. Dostępne: %2$@.\n\nZwolnij miejsce i spróbuj ponownie."
+          }
+        }
+      }
+    },
     "Aby uruchomić helper systemowy, aplikacja musi znajdować się w katalogu Applications." : {
       "localizations" : {
         "de" : {
@@ -12261,6 +12271,9 @@
         }
       }
     },
+    "Podpis Apple potwierdzony" : {
+
+    },
     "Pokaż dziennik techniczny" : {
 
     },
@@ -21169,6 +21182,9 @@
           }
         }
       }
+    },
+    "Za mało miejsca na dysku" : {
+
     },
     "Zacznij od początku" : {
       "localizations" : {

@@ -16,6 +16,10 @@ extension MacOSDownloaderWindowShellView {
                     .font(.headline)
             }
 
+            if downloadFlowModel.hasExpiredButTrustedAppleSignature {
+                expiredAppleSignatureInfoCard
+            }
+
             downloadSummaryMetricRow(
                 title: "Pobrano danych",
                 value: downloadFlowModel.summaryTotalDownloadedText
@@ -46,7 +50,10 @@ extension MacOSDownloaderWindowShellView {
                 value: downloadFlowModel.summaryTemporaryFilesText
             )
 
-            if isFailure, let failureMessage = downloadFlowModel.failureMessage, !failureMessage.isEmpty {
+            if isFailure,
+               !downloadFlowModel.suppressInlineFailureMessage,
+               let failureMessage = downloadFlowModel.failureMessage,
+               !failureMessage.isEmpty {
                 Divider()
                 VStack(alignment: .leading, spacing: 4) {
                     Text(isPartial ? "Status" : "Szczegóły")
@@ -136,6 +143,44 @@ extension MacOSDownloaderWindowShellView {
         }
     }
 
+    private var expiredAppleSignatureInfoCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "info.circle.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Text("Podpis Apple potwierdzony")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+            }
+
+            Text(expiredAppleSignatureInfoDescription)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(
+                cornerRadius: MacUSBDesignTokens.prominentPanelCornerRadius(for: currentVisualMode()),
+                style: .continuous
+            )
+            .fill(Color.secondary.opacity(0.10))
+        )
+        .overlay(
+            RoundedRectangle(
+                cornerRadius: MacUSBDesignTokens.prominentPanelCornerRadius(for: currentVisualMode()),
+                style: .continuous
+            )
+            .stroke(Color.secondary.opacity(0.24), lineWidth: 0.6)
+        )
+    }
+
+    private var expiredAppleSignatureInfoDescription: String {
+        "Ten instalator został prawidłowo podpisany przez Apple. Certyfikat użyty historycznie do podpisu wygasł, co jest oczekiwane dla starszych wydań systemu i nie wpływa na poprawność pobranego pliku."
+    }
+
     func openPlannedInstallerFolder() {
         if let finalInstallerAppURL = downloadFlowModel.finalInstallerAppURL,
            FileManager.default.fileExists(atPath: finalInstallerAppURL.path) {
@@ -143,7 +188,7 @@ extension MacOSDownloaderWindowShellView {
             return
         }
 
-        let fallbackFolderURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
-        NSWorkspace.shared.open(fallbackFolderURL)
+        let folderURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
+        NSWorkspace.shared.open(folderURL)
     }
 }
