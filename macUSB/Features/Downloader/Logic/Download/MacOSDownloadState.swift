@@ -34,17 +34,17 @@ enum DownloadFailureReason: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsupportedSelection:
-            return "Wybrana pozycja nie jest wspierana w aktualnym pobieraniu"
+            return "Wybrana pozycja nie jest obsługiwana w bieżącym przepływie pobierania"
         case let .sessionInitializationFailed(details):
-            return "Nie udalo sie przygotowac sesji pobierania: \(details)"
+            return "Nie udało się rozpocząć pobierania. Nie udało się przygotować sesji pobierania: \(details)"
         case let .downloadFailed(details):
-            return "Pobieranie nie powiodlo sie: \(details)"
+            return "Nie udało się pobrać plików instalatora: \(details)"
         case let .verificationFailed(details):
-            return "Weryfikacja plikow nie powiodla sie: \(details)"
+            return "Weryfikacja plików nie powiodła się: \(details)"
         case let .assemblyFailed(details):
-            return "Budowanie instalatora nie powiodlo sie: \(details)"
+            return "Nie udało się przygotować instalatora: \(details)"
         case let .cleanupFailed(details):
-            return "Czyszczenie plikow tymczasowych nie powiodlo sie: \(details)"
+            return "Usuwanie plików tymczasowych nie zostało ukończone: \(details)"
         }
     }
 }
