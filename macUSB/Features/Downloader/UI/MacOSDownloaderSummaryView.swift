@@ -68,31 +68,35 @@ extension MacOSDownloaderWindowShellView {
             if shouldShowInstallerOutputSection {
                 HStack {
                     Spacer()
-                    if hasFinalInstallerApp {
+                    
+                    VStack(alignment: .trailing, spacing: 8) {
+                        if hasFinalInstallerApp {
+                            Button {
+                                useDownloadedInstallerInAnalysis()
+                            } label: {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "arrow.right.circle.fill")
+                                    Text("Przejdź do tworzenia USB z tym instalatorem")
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                            }
+                            .macUSBSecondaryButtonStyle()
+                            .help("Przejdź do tworzenia USB z tym instalatorem")
+                        }
+                        
                         Button {
-                            useDownloadedInstallerInAnalysis()
+                            openPlannedInstallerFolder()
                         } label: {
                             HStack(spacing: 8) {
-                                Image(systemName: "arrow.right.circle.fill")
-                                Text("Przejdź do tworzenia USB z tym instalatorem")
+                                Image(systemName: "folder.fill")
+                                Text("Pokaż w Finderze")
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                         }
                         .macUSBSecondaryButtonStyle()
-                        .help("Przejdź do tworzenia USB z tym instalatorem")
                     }
-                    Button {
-                        openPlannedInstallerFolder()
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "folder.fill")
-                            Text("Pokaż w Finderze")
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                    }
-                    .macUSBSecondaryButtonStyle()
                 }
                 .padding(.top, 6)
             }
