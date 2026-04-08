@@ -163,10 +163,6 @@ extension MacOSDownloaderWindowShellView {
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
                     }
-
-                    if !downloadFlowModel.discoveredDownloadItems.isEmpty {
-                        downloadManifestInlineListView
-                    }
                 }
             }
             .padding(MacUSBDesignTokens.panelInnerPadding)
@@ -286,9 +282,9 @@ extension MacOSDownloaderWindowShellView {
         case .downloading:
             return downloadFlowModel.downloadProgress
         case .verifying:
-            return downloadFlowModel.verifyProgress
+            return nil
         case .buildingInstaller:
-            return downloadFlowModel.buildProgress
+            return nil
         case .cleanup:
             return nil
         }
@@ -309,53 +305,6 @@ extension MacOSDownloaderWindowShellView {
             format: String(localized: "Szybkość pobierania: %@"),
             speed
         )
-    }
-
-    var downloadManifestInlineListView: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Pliki do pobrania")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-
-            ForEach(downloadFlowModel.discoveredDownloadItems) { item in
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Image(systemName: iconForManifestItemStatus(item))
-                        .font(.caption)
-                        .foregroundColor(.accentColor)
-                        .frame(width: 12)
-                    Text(item.name)
-                        .font(.caption2.monospaced())
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Spacer(minLength: 8)
-                    Text(item.expectedSizeText)
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .macUSBPanelSurface(.subtle)
-    }
-
-    private func iconForManifestItemStatus(_ item: DownloadManifestItem) -> String {
-        if downloadFlowModel.completedStages.contains(.downloading) {
-            return "checkmark.circle.fill"
-        }
-
-        let currentIndex = downloadFlowModel.downloadCurrentIndex
-        let itemIndex = item.order + 1
-        if downloadFlowModel.currentStage == .downloading {
-            if itemIndex < currentIndex {
-                return "checkmark.circle.fill"
-            }
-            if itemIndex == currentIndex {
-                return "arrow.down.circle.fill"
-            }
-        }
-
-        return "clock.fill"
     }
 
     private var activeStageBackgroundFill: some View {
