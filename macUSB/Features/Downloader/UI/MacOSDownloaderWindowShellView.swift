@@ -2,6 +2,14 @@ import SwiftUI
 import AppKit
 import UserNotifications
 
+// MARK: - Downloader Tab
+
+enum DownloaderTab: String, CaseIterable, Identifiable {
+    case macos = "macOS"
+    case iso = "Windows / Linux"
+    var id: String { rawValue }
+}
+
 struct MacOSDownloaderWindowShellView: View {
     let contentHeight: CGFloat
     let onClose: () -> Void
@@ -12,25 +20,44 @@ struct MacOSDownloaderWindowShellView: View {
     @State var showAllAvailableVersions = false
     @State var selectedInstallerID: String?
     @State var activeDownloadEntry: MacOSInstallerEntry?
+    @State var activeTab: DownloaderTab = .macos
 
     var body: some View {
         VStack(alignment: .leading, spacing: MacUSBDesignTokens.sectionGroupSpacing) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(String(localized: "Pobieranie systemu macOS"))
+            VStack(alignment: .leading, spacing: 10) {
+                Text(managerTitleText)
                     .font(.title3.weight(.semibold))
                 Text(managerDescriptionText)
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
+
+                if activeDownloadEntry == nil {
+                    Picker("", selection: $activeTab) {
+                        ForEach(DownloaderTab.allCases) { tab in
+                            Text(tab.rawValue).tag(tab)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .onChange(of: activeTab) { _ in
+                        selectedInstallerID = nil
+                    }
+                }
             }
             .padding(MacUSBDesignTokens.panelInnerPadding)
             .frame(maxWidth: .infinity, alignment: .leading)
             .macUSBPanelSurface(.subtle)
 
-            if let activeDownloadEntry {
-                downloaderProgressSection(for: activeDownloadEntry)
+            // ---- Tab content ----
+            if activeTab == .macos {
+                if let activeDownloadEntry {
+                    downloaderProgressSection(for: activeDownloadEntry)
+                } else {
+                    installerSelectionSection
+                }
             } else {
-                installerSelectionSection
+                ISODownloaderListView(onClose: onClose)
             }
         }
         .padding(.horizontal, MacUSBDesignTokens.contentHorizontalPadding)
@@ -94,14 +121,28 @@ struct MacOSDownloaderWindowShellView: View {
             : String(localized: "Zamknij")
     }
 
+    var managerTitleText: String {
+        switch activeTab {
+        case .macos:
+            return String(localized: "Pobieranie systemu macOS")
+        case .iso:
+            return String(localized: "Pobieranie systemu Windows / Linux")
+        }
+    }
+
     var managerDescriptionText: String {
-        if activeDownloadEntry == nil {
-            return String(localized: "Wybierz instalator dostępny na serwerach Apple")
+        switch activeTab {
+        case .iso:
+            return String(localized: "Wybierz system Windows lub dystrybucję Linux do pobrania")
+        case .macos:
+            if activeDownloadEntry == nil {
+                return String(localized: "Wybierz instalator dostępny na serwerach Apple")
+            }
+            if downloadFlowModel.isFinished {
+                return String(localized: "Pobieranie zakończone. Podsumowanie jest dostępne poniżej")
+            }
+            return String(localized: "Trwa pobieranie i przygotowywanie instalatora")
         }
-        if downloadFlowModel.isFinished {
-            return String(localized: "Pobieranie zakończone. Podsumowanie jest dostępne poniżej")
-        }
-        return String(localized: "Trwa pobieranie i przygotowywanie instalatora")
     }
 
     var shouldConfirmCloseDuringDownload: Bool {
