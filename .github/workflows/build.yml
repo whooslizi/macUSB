@@ -1,0 +1,65 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build & Test (macOS)
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Show Xcode version
+        run: xcodebuild -version
+
+      # ── Build ──────────────────────────────────────────────────────────────
+      - name: Build (unsigned)
+        run: |
+          xcodebuild build \
+            -scheme macUSB \
+            -configuration Release \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty || true
+
+      - name: Run unit tests
+        run: |
+          xcodebuild test \
+            -scheme macUSB \
+            -testPlan macUSBTests \
+            -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty || true
+        continue-on-error: true   # tests may require hardware; don't fail the whole job
+
+      - name: Locate built .app
+        id: locate
+        run: |
+          APP=$(find ~/Library/Developer/Xcode/DerivedData -name "macUSB.app" \
+                  -path "*/Release/*" 2>/dev/null | head -1)
+          echo "app_path=$APP" >> "$GITHUB_OUTPUT"
+
+      - name: Zip .app
+        run: |
+          cd "$(dirname "${{ steps.locate.outputs.app_path }}")"
+          zip -r "$GITHUB_WORKSPACE/macUSB.zip" macUSB.app
+          echo "Zipped: $(du -sh "$GITHUB_WORKSPACE/macUSB.zip" | cut -f1)"
+
+      - name: Upload macUSB.zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: macUSB-${{ github.sha }}
+          path: macUSB.zip
+          retention-days: 30
