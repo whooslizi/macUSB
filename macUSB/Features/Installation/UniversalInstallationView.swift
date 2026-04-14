@@ -21,6 +21,8 @@ struct UniversalInstallationView: View {
     let isSierra: Bool
     let isMavericks: Bool
     let isPPC: Bool
+    let isWindowsISO: Bool
+    let isLinuxISO: Bool
     
     @Binding var rootIsActive: Bool
     @Binding var isTabLocked: Bool
@@ -215,6 +217,11 @@ struct UniversalInstallationView: View {
                                     } else if isPPC {
                                         Text("• Nośnik USB zostanie odpowiednio sformatowany")
                                         Text("• Obraz instalacyjny zostanie przywrócony")
+                                    } else if isWindowsISO {
+                                        Text("• Nośnik USB zostanie sformatowany")
+                                        Text("• Pliki instalacyjne zostaną skopiowane")
+                                    } else if isLinuxISO {
+                                        Text("• Obraz ISO zostanie skopiowany w trybie RAW")
                                     } else {
                                         Text("• Pliki systemowe zostaną przygotowane")
                                         Text("• Nośnik USB zostanie sformatowany")
@@ -223,7 +230,9 @@ struct UniversalInstallationView: View {
                                             Text("• Struktura instalatora zostanie sfinalizowana")
                                         }
                                     }
-                                    Text("• Pliki tymczasowe zostaną automatycznie usunięte")
+                                    if !isLinuxISO && !isWindowsISO {
+                                        Text("• Pliki tymczasowe zostaną automatycznie usunięte")
+                                    }
                                 }
                                 .font(.subheadline).foregroundColor(.secondary)
                             }
