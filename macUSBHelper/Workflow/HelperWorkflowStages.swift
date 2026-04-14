@@ -171,6 +171,19 @@ extension HelperWorkflowExecutor {
                 sourcePath: effectiveAppURL.path,
                 postInstallSourceAppPath: postInstallSourcePath
             )
+
+        case .windowsISO:
+            context = PreparedWorkflowContext(
+                sourcePath: request.sourceAppPath,
+                postInstallSourceAppPath: nil
+            )
+
+        case .linuxISO:
+            let isoPath = request.originalImagePath ?? request.sourceAppPath
+            context = PreparedWorkflowContext(
+                sourcePath: isoPath,
+                postInstallSourceAppPath: nil
+            )
         }
 
         emitProgress(
@@ -202,7 +215,7 @@ extension HelperWorkflowExecutor {
 
         var stages: [WorkflowStage] = []
 
-        if request.workflowKind != .ppc && request.needsPreformat {
+        if request.workflowKind != .ppc && request.workflowKind != .windowsISO && request.workflowKind != .linuxISO && request.needsPreformat {
             stages.append(
                 WorkflowStage(
                     key: "preformat",
@@ -362,6 +375,60 @@ extension HelperWorkflowExecutor {
                     )
                 )
             }
+        
+        case .windowsISO:
+            if request.needsPreformat {
+                stages.append(
+                    WorkflowStage(
+                        key: "windows_format",
+                        titleKey: HelperWorkflowLocalizationKeys.windowsFormatTitle,
+                        statusKey: HelperWorkflowLocalizationKeys.windowsFormatStatus,
+                        startPercent: 10,
+                        endPercent: 20,
+                        executable: "/usr/sbin/diskutil",
+                        arguments: ["partitionDisk", "/dev/\(formatTargetWholeDisk)", "1", "GPT", "ExFAT", "WIN_USB", "100%"],
+                        parseToolPercent: false
+                    )
+                )
+            }
+            stages.append(
+                WorkflowStage(
+                    key: "windows_copy",
+                    titleKey: HelperWorkflowLocalizationKeys.windowsCopyTitle,
+                    statusKey: HelperWorkflowLocalizationKeys.windowsCopyStatus,
+                    startPercent: request.needsPreformat ? 20 : 10,
+                    endPercent: 99,
+                    executable: "/usr/bin/ditto",
+                    arguments: [context.sourcePath, "/Volumes/WIN_USB"],
+                    parseToolPercent: false
+                )
+            )
+
+        case .linuxISO:
+            stages.append(
+                WorkflowStage(
+                    key: "linux_unmount",
+                    titleKey: HelperWorkflowLocalizationKeys.linuxUnmountTitle,
+                    statusKey: HelperWorkflowLocalizationKeys.linuxUnmountStatus,
+                    startPercent: 10,
+                    endPercent: 15,
+                    executable: "/usr/sbin/diskutil",
+                    arguments: ["unmountDisk", "/dev/\(formatTargetWholeDisk)"],
+                    parseToolPercent: false
+                )
+            )
+            stages.append(
+                WorkflowStage(
+                    key: "linux_dd",
+                    titleKey: HelperWorkflowLocalizationKeys.linuxDdTitle,
+                    statusKey: HelperWorkflowLocalizationKeys.linuxDdStatus,
+                    startPercent: 15,
+                    endPercent: 99,
+                    executable: "/bin/dd",
+                    arguments: ["if=\(context.sourcePath)", "of=/dev/r\(formatTargetWholeDisk)", "bs=1m"],
+                    parseToolPercent: false
+                )
+            )
         }
 
         return stages
