@@ -314,6 +314,8 @@ struct SystemAnalysisView: View {
                         isSierra: logic.isSierra,
                         isMavericks: logic.isMavericks,
                         isPPC: logic.isPPC,
+                        isWindowsISO: logic.isWindowsISO,
+                        isLinuxISO: logic.isLinuxISO,
                         rootIsActive: $navigateToInstall,
                         isTabLocked: $isTabLocked
                     ),
